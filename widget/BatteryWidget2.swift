@@ -1,6 +1,6 @@
 //
 //  DoubleBatteryWidget.swift
-//  AirBatteryWidgetExtension
+//  GlassyBatteryWidgetExtension
 //
 //  Created by apple on 2024/2/20.
 //
@@ -14,7 +14,7 @@ struct LargeWidgetView2: View {
     
     var body: some View {
         if !entry.mainApp{
-            Text("AirBattery is not running\nLaunch the app to make the widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make the widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -95,7 +95,7 @@ struct doubleRowBatteryWidgetEntryView: View {
     
     var body: some View {
         if !entry.mainApp{
-            Text("AirBattery is not running\nLaunch the app to make the widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make the widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -259,7 +259,7 @@ struct singleBatteryWidgetEntryView: View {
     
     var body: some View {
         if !entry.mainApp{
-            Text("AirBattery is not running\nLaunch the app to make\nthe widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make\nthe widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -356,7 +356,7 @@ struct batteryWidgetEntryView2: View {
                     let item = entry.deviceName != "" ? entry.data.first(where: { $0.deviceName == entry.deviceName }) : nil
                     singleBatteryWidgetEntryView(entry: entry, item: item, deviceName: entry.deviceName, warringText: "Right click to configure".local)
                 } else {
-                    let deviceName = AirBatteryModel.singleDeviceName()
+                    let deviceName = GlassyBatteryModel.singleDeviceName()
                     let item = deviceName != "" ? entry.data.first(where: { $0.deviceName == deviceName }) : nil
                     singleBatteryWidgetEntryView(entry: entry, item: item, deviceName: deviceName, warringText: "Select a Device in Preferences".local)
                 }
@@ -369,7 +369,7 @@ struct batteryWidgetEntryView2: View {
             @unknown default:
                 EmptyView()
             }
-        }.widgetURL(URL(string: "airbattery://reloadwingets"))
+        }.widgetURL(URL(string: "glassybattery://reloadwingets"))
     }
 }
 

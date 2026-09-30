@@ -21,11 +21,11 @@ struct ViewSizeTimelineProviderNew: AppIntentTimelineProvider {
     func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> SimpleEntry {
         var mainApp = false
         let apps = NSWorkspace.shared.runningApplications
-        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.lihaoyun6.AirBattery" { mainApp = true } }
-        var data = AirBatteryModel.readData()
+        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.deckirin.GlassyBattery" { mainApp = true } }
+        var data = GlassyBatteryModel.readData()
         let ncFiles = getFiles(withExtension: "json", in: ncFolder)
         for ncFile in ncFiles {
-            let ncData = AirBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
+            let ncData = GlassyBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
             data += ncData
         }
         if context.family == .systemSmall || context.family == .systemMedium {
@@ -39,11 +39,11 @@ struct ViewSizeTimelineProviderNew: AppIntentTimelineProvider {
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<SimpleEntry> {
         var mainApp = false
         let apps = NSWorkspace.shared.runningApplications
-        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.lihaoyun6.AirBattery" { mainApp = true } }
-        var data = AirBatteryModel.readData()
+        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.deckirin.GlassyBattery" { mainApp = true } }
+        var data = GlassyBatteryModel.readData()
         let ncFiles = getFiles(withExtension: "json", in: ncFolder)
         for ncFile in ncFiles {
-            let ncData = AirBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
+            let ncData = GlassyBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
             data += ncData
         }
         let entry: SimpleEntry
@@ -66,11 +66,11 @@ struct ViewSizeTimelineProvider: TimelineProvider {
     func getSnapshot(in context: Context, completion: @escaping (SimpleEntry) -> Void) {
         var mainApp = false
         let apps = NSWorkspace.shared.runningApplications
-        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.lihaoyun6.AirBattery" { mainApp = true } }
-        var data = AirBatteryModel.readData()
+        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.deckirin.GlassyBattery" { mainApp = true } }
+        var data = GlassyBatteryModel.readData()
         let ncFiles = getFiles(withExtension: "json", in: ncFolder)
         for ncFile in ncFiles {
-            let ncData = AirBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
+            let ncData = GlassyBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
             data += ncData
         }
         let entry: SimpleEntry
@@ -86,11 +86,11 @@ struct ViewSizeTimelineProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<SimpleEntry>) -> Void) {
         var mainApp = false
         let apps = NSWorkspace.shared.runningApplications
-        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.lihaoyun6.AirBattery" { mainApp = true } }
-        var data = AirBatteryModel.readData()
+        for app in apps as [NSRunningApplication] { if app.bundleIdentifier == "com.deckirin.GlassyBattery" { mainApp = true } }
+        var data = GlassyBatteryModel.readData()
         let ncFiles = getFiles(withExtension: "json", in: ncFolder)
         for ncFile in ncFiles {
-            let ncData = AirBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
+            let ncData = GlassyBatteryModel.ncGetAll(url: ncFile, fromWidget: true)
             data += ncData
         }
         let entry: SimpleEntry
@@ -132,7 +132,7 @@ struct batteryWidgetEntryView : View {
             @unknown default:
                 EmptyView()
             }
-        }.widgetURL(URL(string: "airbattery://reloadwingets"))
+        }.widgetURL(URL(string: "glassybattery://reloadwingets"))
     }
 }
 
@@ -142,7 +142,7 @@ struct LargeWidgetView : View {
     
     var body: some View {
         if !entry.mainApp{
-            Text("AirBattery is not running\nLaunch the app to make the widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make the widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -226,7 +226,7 @@ struct SmallWidgetView : View {
     
     var body: some View {
         if !entry.mainApp {
-            Text("AirBattery is not running\nLaunch the app to make\nthe widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make\nthe widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -385,7 +385,7 @@ struct MediumWidgetView : View {
 
     var body: some View {
         if !entry.mainApp{
-            Text("AirBattery is not running\nLaunch the app to make the widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make the widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -517,7 +517,7 @@ struct batteryWidget: Widget {
                 .widgetBackground(Color("WidgetBackground"))
         }
         .configurationDisplayName("Batteries")
-        .description("Displays battery usage for your devices from AirBattery")
+        .description("Displays battery usage for your devices from GlassyBattery")
         .disableContentMarginsIfNeeded()
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }

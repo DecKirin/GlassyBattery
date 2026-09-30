@@ -1,18 +1,18 @@
 # 
 <p align="center">
-<img src="./AirBattery/Assets.xcassets/AppIcon.appiconset/icon_128x128@2x.png" width="200" height="200" />
-<h1 align="center">AirBattery</h1>
-<h3 align="center">Mac 周边所有设备的电量, 汇聚于一块 Liquid Glass 面板 — 同时支持 Dock 栏、状态栏与小组件.<br><a href="./README.md">[English Version]</a><br><a href="https://lihaoyun6.github.io/airbattery/">[软件主页]</a></h3> 
+<img src="./img/icon.png" width="200" height="200" />
+<h1 align="center">GlassyBattery</h1>
+<h3 align="center">Mac 周边所有设备的电量, 汇聚于一块 Liquid Glass 面板 — 同时支持 Dock 栏、状态栏与小组件.<br><a href="./README.md">[English Version]</a></h3> 
 </p>
 
-AirBattery 可以获取你的 Mac 以及周边所有 Apple 或蓝牙设备的电量信息 — iPhone、iPad、Apple Watch、AirPods、妙控鼠标 / 键盘 / 触控板, 以及第三方蓝牙外设 — 无需繁琐配对, 也无需任何配置. 你可以随心选择查看方式: 悬浮于桌面之上的玻璃面板、状态栏中的实时电量图标、桌面与通知中心的小组件, 或终端中的 `airbattery` 命令.
+GlassyBattery 可以获取你的 Mac 以及周边所有 Apple 或蓝牙设备的电量信息 — iPhone、iPad、Apple Watch、AirPods、妙控鼠标 / 键盘 / 触控板, 以及第三方蓝牙外设 — 无需繁琐配对, 也无需任何配置. 你可以随心选择查看方式: 悬浮于桌面之上的玻璃面板、状态栏中的实时电量图标、桌面与通知中心的小组件, 或终端中的 `glassybattery` 命令.
 
 ## 运行截图
 <p align="center">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./img/preview_dark.png">
   <source media="(prefers-color-scheme: light)" srcset="./img/preview.png">
-  <img alt="AirBattery Screenshots" src="./img/preview.png" width="840"/>
+  <img alt="GlassyBattery Screenshots" src="./img/preview.png" width="314"/>
 </picture>
 </p>
 
@@ -39,16 +39,12 @@ AirBattery 可以获取你的 Mac 以及周边所有 Apple 或蓝牙设备的电
 - macOS 13.0 及更高版本 (Liquid Glass 材质需要 macOS 26)  
 
 ### 安装:
-可[点此前往](../../releases/latest)下载最新版安装文件. 或使用homebrew安装:  
-
-```bash
-brew install lihaoyun6/tap/airbattery
-```
+前往 [Releases](../../releases/latest) 下载最新的磁盘映像, 打开后将 **GlassyBattery** 拖入“应用程序”文件夹即可.
 
 ### 使用:
-- AirBattery 启动后默认同时显示在 Dock 栏和状态栏上, 也可以只显示其中之一.  
+- GlassyBattery 启动后默认同时显示在 Dock 栏和状态栏上, 也可以只显示其中之一.  
 
-- 无需任何手动配置, AirBattery 启动后会自动搜索所有支持隔空电量获取的设备. 
+- 无需任何手动配置, GlassyBattery 启动后会自动搜索所有支持隔空电量获取的设备. 
 - 您可以单击 Dock 图标 / 状态栏图标、或添加小组件查随时看周边设备的电量信息. 
 - 利用 `Nearcast` 功能还可以随时查看局域网中属于你的其他 Mac 及其外设的电量.
 - 您还可以在偏好设置中将状态栏图标更改为实时电量显示, 就像系统自带图标的那样.  
@@ -57,19 +53,19 @@ brew install lihaoyun6/tap/airbattery
 
 ## 常见问题
 **1. 为什么我的 iPhone / iPad / Apple Watch 没有显示出来?**  
-> 请确保 iPhone / iPad 已信任此 Mac ***(且至少在 AirBattery 运行状态下使用数据线连接 Mac 一次以进行配对)***. 之后只需确保其与 Mac 处于同一局域网中即可.  
+> 请确保 iPhone / iPad 已信任此 Mac ***(且至少在 GlassyBattery 运行状态下使用数据线连接 Mac 一次以进行配对)***. 之后只需确保其与 Mac 处于同一局域网中即可.  
 
 **2. 我的 Apple Watch 也需要进行预连接吗?**  
-> 不需要, 一旦 AirBattery 通过 WiFi 或 USB 发现任何已配对的 iPhone, 将会自动读取与其配对的 Apple Watch 的电量信息 **(通过蓝牙发现的 iPhone 不支持读取手表电量!)**
+> 不需要, 一旦 GlassyBattery 通过 WiFi 或 USB 发现任何已配对的 iPhone, 将会自动读取与其配对的 Apple Watch 的电量信息 **(通过蓝牙发现的 iPhone 不支持读取手表电量!)**
 
 **3. 为什么某些设备名称前有一个⚠️符号?**
 > 出现这个符号, 说明此设备已经超过十分钟以上没有更新过电量信息, 可能已离线或关闭.
 
 **4. 我的 iPhone 没有连接到 WiFi, 可以读取电池信息吗?**  
-> 请安装 AirBattery v1.1.2 或更高版本, 在设置面板中启用 `通过蓝牙发现 iPhone / iPad` 选项, 并保持设备蓝牙开启即可 ***(此功能仅支持 iPhone 或插卡版 iPad设备!)***  
+> 在设置面板中启用 `通过蓝牙发现 iPhone / iPad` 选项, 并保持设备蓝牙开启即可 ***(此功能仅支持 iPhone 或插卡版 iPad设备!)***  
 
-**5. 为什么 AirBattery 需要使用蓝牙权限?**  
-> AirBattery 需要使用蓝牙来获取周边设备的数据包以解析其电量信息.  
+**5. 为什么 GlassyBattery 需要使用蓝牙权限?**  
+> GlassyBattery 需要使用蓝牙来获取周边设备的数据包以解析其电量信息.  
 
 **6. 为什么我的面板看起来是扁平的 / 为什么没有玻璃效果?**  
 > Liquid Glass 是 macOS 26 的材质. 在 macOS 13–15 上, 同样的面板与小组件会以带色调的半透明填充呈现.  
@@ -83,18 +79,23 @@ brew install lihaoyun6/tap/airbattery
 **9. 面板在我的显示器上太小 (或太大), 可以调整尺寸吗?**
 > 偏好设置 → *菜单栏 & 程序坞* → *Device Dropdown* → *Panel Size*, 可在**小**、**默认**与**大**之间选择. 整块面板会按比例缩放, 该设置将在下次打开面板时生效.  
 
-## 赞助
-<img src="./img/donate.png" width="350"/>
-
 ## 致谢
 [libimobiledevice](https://github.com/libimobiledevice/libimobiledevice) @libimobiledevice  
-> AirBattery 使用基于`73b6fd1`版本编译的 libimobiledevice 可执行文件及运行库. 如有疑虑可自行编译替换  
+> GlassyBattery 使用基于`73b6fd1`版本编译的 libimobiledevice 可执行文件及运行库. 如有疑虑可自行编译替换  
 
 [comptest](https://gist.github.com/nikias/ebc6e975dc908f3741af0f789c5b1088) @nikias  
-> AirBattery 使用基于此源代码编译的 comptest 可执行文件. 如有疑虑可自行编译替换  
+> GlassyBattery 使用基于此源代码编译的 comptest 可执行文件. 如有疑虑可自行编译替换  
 
 [MultipeerKit](https://github.com/insidegui/MultipeerKit) @insidegui  
-> AirBattery 使用 MultipeerKit 框架来进行局域网内的对称多端通信   
+> GlassyBattery 使用 MultipeerKit 框架来进行局域网内的对称多端通信   
 
 [ChatGPT](https://chat.openai.com) @OpenAI  
 > 注: 本项目部分代码使用 ChatGPT 生成或重构整理
+
+## 关于本分支
+GlassyBattery 基于 [lihaoyun6](https://github.com/lihaoyun6) 的 [AirBattery](https://github.com/lihaoyun6/AirBattery) 修改而来, 由 Xiding Luo 于 2026 年围绕 Liquid Glass 界面进行了重新设计与更名. 原版应用、设备发现引擎与 Nearcast 功能均归功于原作者. 如果你喜欢它, 欢迎支持[上游项目](https://github.com/lihaoyun6/AirBattery).
+
+GlassyBattery 使用独立的 Bundle ID (`com.deckirin.GlassyBattery`), 因此可以与 AirBattery 同时安装, 其设置、小组件与 `glassybattery` 命令均与 AirBattery 相互独立.
+
+## 许可协议
+GlassyBattery 与 AirBattery 一样, 是以 [GNU Affero 通用公共许可证 v3.0](./LICENSE) 发布的自由软件. 原作品版权所有 © 2024 lihaoyun6; 修改部分版权所有 © 2026 Xiding Luo. 本软件不提供任何担保.
