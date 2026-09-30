@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
-# Build AirBattery.app and package it as a drag-to-Applications DMG.
+# Build GlassyBattery.app and package it as a drag-to-Applications DMG.
 #
 # Local counterpart to .github/workflows/build-dmg.yml. Same build settings, same verification
 # steps, plus the Developer ID + notarization path that CI cannot take (no certificate there).
 #
 #   ./scripts/build-dmg.sh                       # auto: Developer ID if you have one, else ad-hoc
 #   ./scripts/build-dmg.sh --adhoc               # force ad-hoc (unsigned, for local testing)
-#   ./scripts/build-dmg.sh --notarize AirBattery # Developer ID + notarize + staple (shippable)
+#   ./scripts/build-dmg.sh --notarize GlassyBattery # Developer ID + notarize + staple (shippable)
 #   ./scripts/build-dmg.sh --help
 #
 # An AD-HOC signed DMG opens only on the machine that built it; anyone else has to run
-# `xattr -dr com.apple.quarantine /Applications/AirBattery.app` first. Ad-hoc builds also pass
+# `xattr -dr com.apple.quarantine /Applications/GlassyBattery.app` first. Ad-hoc builds also pass
 # ENABLE_HARDENED_RUNTIME=NO — see resolve_signing() for why that is required, not preferred.
 
 set -euo pipefail
@@ -21,12 +21,12 @@ cd "$REPO_ROOT"
 
 # ---------------------------------------------------------------------------- defaults
 
-PROJECT="AirBattery.xcodeproj"
-SCHEME="AirBattery"
+PROJECT="GlassyBattery.xcodeproj"
+SCHEME="GlassyBattery"
 CONFIGURATION="Release"
 DERIVED_DATA="$REPO_ROOT/build"
 OUTPUT_DIR="$REPO_ROOT/dist"
-VOLNAME="AirBattery"
+VOLNAME="GlassyBattery"
 
 IDENTITY="auto"        # "auto" | "-" (ad-hoc) | a codesign identity name
 TEAM_ID=""             # DEVELOPMENT_TEAM; derived from the identity when not given
@@ -60,7 +60,7 @@ Options:
                              xcrun notarytool store-credentials <profile> \
                                --apple-id <id> --team-id <team> --password <app-specific-password>
   --smoke                  Launch the built app for 10s to prove dyld can map embedded frameworks.
-                           Off by default locally: it starts a real second AirBattery instance,
+                           Off by default locally: it starts a real second GlassyBattery instance,
                            which writes to the same App Group container as one already running.
   --skip-build             Package the app already in the derived-data path; don't rebuild.
   --configuration <name>   Xcode configuration. Default: Release.
@@ -89,7 +89,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-APP="$DERIVED_DATA/Build/Products/$CONFIGURATION/AirBattery.app"
+APP="$DERIVED_DATA/Build/Products/$CONFIGURATION/GlassyBattery.app"
 
 # ---------------------------------------------------------------------------- preflight
 
@@ -102,10 +102,10 @@ preflight() {
 
     info "$(xcodebuild -version | tr '\n' ' ')"
 
-    # AirBattery calls SwiftUI's glassEffect(), which first appeared in the macOS 26 SDK. Catching
+    # GlassyBattery calls SwiftUI's glassEffect(), which first appeared in the macOS 26 SDK. Catching
     # that here turns a wall of compile errors into one sentence. Any newer SDK (27, ...) is fine.
     if ! xcodebuild -showsdks 2>/dev/null | grep -qE "macosx(2[6-9]|[3-9][0-9])"; then
-        die "no macOS 26+ SDK in the selected Xcode. AirBattery uses glassEffect(), which needs Xcode 26 or newer.
+        die "no macOS 26+ SDK in the selected Xcode. GlassyBattery uses glassEffect(), which needs Xcode 26 or newer.
        Selected: $(xcode-select -p)
        Switch with: sudo xcode-select -s /Applications/Xcode-26.app"
     fi
@@ -151,7 +151,7 @@ resolve_signing() {
             ENABLE_HARDENED_RUNTIME=NO
         )
         warn "no Developer ID Application certificate — building AD-HOC."
-        info "The DMG will open on this Mac only. Others need: xattr -dr com.apple.quarantine /Applications/AirBattery.app"
+        info "The DMG will open on this Mac only. Others need: xattr -dr com.apple.quarantine /Applications/GlassyBattery.app"
     else
         # "Developer ID Application: Name (TEAMID)" -> TEAMID
         if [[ -z "$TEAM_ID" && "$IDENTITY" =~ \(([A-Z0-9]{10})\)$ ]]; then
@@ -209,10 +209,10 @@ verify_bundle() {
 
     codesign --verify --deep --strict "$APP" || die "codesign verification failed."
     info "signature: ok"
-    info "archs: $(lipo -archs "$APP/Contents/MacOS/AirBattery")"
+    info "archs: $(lipo -archs "$APP/Contents/MacOS/GlassyBattery")"
 
-    [[ -d "$APP/Contents/PlugIns/AirBatteryWidgetExtension.appex" ]] || die "widget extension missing from bundle."
-    [[ -d "$APP/Contents/Library/LoginItems/AirBatteryHelper.app" ]] || die "AirBatteryHelper login item missing from bundle."
+    [[ -d "$APP/Contents/PlugIns/GlassyBatteryWidgetExtension.appex" ]] || die "widget extension missing from bundle."
+    [[ -d "$APP/Contents/Library/LoginItems/GlassyBatteryHelper.app" ]] || die "GlassyBatteryHelper login item missing from bundle."
     [[ -x "$APP/Contents/Resources/logReader.sh" ]] || die "logReader.sh missing or not executable in bundle."
     [[ -d "$APP/Contents/Frameworks/Sparkle.framework" ]] || die "Sparkle.framework missing from bundle."
     info "embedded: widget, login item, logReader.sh, Sparkle.framework"
@@ -240,14 +240,14 @@ verify_bundle() {
     info "team: ${team:-none (ad-hoc)}   hardened runtime: $([[ "$flags" == *runtime* ]] && echo yes || echo no)"
 }
 
-# Opt-in, because it starts a real second AirBattery instance. Fails hard only on a dynamic-linking
+# Opt-in, because it starts a real second GlassyBattery instance. Fails hard only on a dynamic-linking
 # failure — a menu bar app can exit early for unrelated reasons, which shouldn't fail the build.
 smoke_test() {
     step "Smoke test (10s launch)"
 
     local log pid
     log=$(mktemp)
-    "$APP/Contents/MacOS/AirBattery" >"$log" 2>&1 &
+    "$APP/Contents/MacOS/GlassyBattery" >"$log" 2>&1 &
     pid=$!
     sleep 10
 
@@ -274,15 +274,15 @@ smoke_test() {
 
 package_dmg() {
     VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
-    DMG="$OUTPUT_DIR/AirBattery-$VERSION.dmg"
+    DMG="$OUTPUT_DIR/GlassyBattery-$VERSION.dmg"
 
-    step "Packaging AirBattery-$VERSION.dmg"
+    step "Packaging GlassyBattery-$VERSION.dmg"
 
     mkdir -p "$OUTPUT_DIR"
     STAGE=$(mktemp -d)
     trap 'rm -rf "$STAGE"' EXIT
 
-    ditto "$APP" "$STAGE/AirBattery.app"        # ditto, not cp: preserves the signature and xattrs
+    ditto "$APP" "$STAGE/GlassyBattery.app"        # ditto, not cp: preserves the signature and xattrs
     ln -s /Applications "$STAGE/Applications"
 
     rm -f "$DMG"
@@ -329,7 +329,7 @@ info "sha256:  $(shasum -a 256 "$DMG" | cut -d' ' -f1)"
 
 if [[ "$IDENTITY" == "-" ]]; then
     printf '\n%sThis DMG is ad-hoc signed.%s Anyone who did not build it must run, after copying to /Applications:\n' "$YELLOW" "$RESET"
-    printf '    %sxattr -dr com.apple.quarantine /Applications/AirBattery.app%s\n' "$DIM" "$RESET"
+    printf '    %sxattr -dr com.apple.quarantine /Applications/GlassyBattery.app%s\n' "$DIM" "$RESET"
 elif [[ -z "$NOTARY_PROFILE" ]]; then
     printf '\n%sSigned but not notarized.%s Gatekeeper still blocks it on other Macs — add --notarize <profile>.\n' "$YELLOW" "$RESET"
 else

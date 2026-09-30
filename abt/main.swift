@@ -10,8 +10,8 @@ import ArgumentParser
 
 let fd = FileManager.default
 let ud = UserDefaults.standard
-let key = "com.lihaoyun6.AirBattery.widget"
-let ncFolder = fd.urls(for: .libraryDirectory, in: .userDomainMask).first!.appendingPathComponent("Containers/\(AirBatteryModel.key)/Data/Documents/NearcastData")
+let key = "com.deckirin.GlassyBattery.widget"
+let ncFolder = fd.urls(for: .libraryDirectory, in: .userDomainMask).first!.appendingPathComponent("Containers/\(GlassyBatteryModel.key)/Data/Documents/NearcastData")
 
 extension Device {
     func toItem() -> item {
@@ -42,7 +42,7 @@ struct item: Codable, Equatable {
 }
 
 
-struct airbattery: ParsableCommand {
+struct glassybattery: ParsableCommand {
     static var configuration = CommandConfiguration(version: "0.1.0")
     
     @Flag(name: .shortAndLong, help: "Including Nearcast devices")
@@ -63,17 +63,17 @@ struct airbattery: ParsableCommand {
     }
 
     mutating func run() throws {
-        if let url = URL(string: "airbattery://writedata") {
+        if let url = URL(string: "glassybattery://writedata") {
             let config = NSWorkspace.OpenConfiguration()
             config.activates = false
             NSWorkspace.shared.open(url, configuration: config)
         }
         usleep(500000)
-        var devices = AirBatteryModel.readData()
+        var devices = GlassyBatteryModel.readData()
         if nearcast {
             let allNearcast = getFiles(withExtension: "json", in: ncFolder)
             for jsonUrl in allNearcast {
-                devices += AirBatteryModel.ncGetAll(url: jsonUrl, fromWidget: true)
+                devices += GlassyBatteryModel.ncGetAll(url: jsonUrl, fromWidget: true)
             }
         }
         let items: [item] = devices.map { $0.toItem() }
@@ -123,4 +123,4 @@ struct airbattery: ParsableCommand {
     }
 }
 
-airbattery.main()
+glassybattery.main()

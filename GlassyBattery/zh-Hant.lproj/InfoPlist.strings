@@ -1,0 +1,9 @@
+/* 
+  InfoPlist.strings
+  GlassyBattery
+
+  Created by apple on 2024/2/11.
+  
+*/
+"NSBluetoothAlwaysUsageDescription" = "GlassyBattery使用藍芽來獲取周邊裝置的電池資訊";
+"NSLocalNetworkUsageDescription" = "GlassyBattery會透過區域網絡來獲取周邊裝置的電池資訊";

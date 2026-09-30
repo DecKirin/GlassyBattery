@@ -1,12 +1,12 @@
 name: Build DMG
 
-# Builds AirBattery.app and packages it as a drag-to-Applications DMG.
+# Builds GlassyBattery.app and packages it as a drag-to-Applications DMG.
 #
 # The DMG is AD-HOC SIGNED, not signed with a Developer ID and not notarized, because CI has no
 # access to the signing certificate. Gatekeeper will refuse to open it on a machine that did not
 # build it — recipients have to right-click > Open, or clear the quarantine attribute:
 #
-#     xattr -dr com.apple.quarantine /Applications/AirBattery.app
+#     xattr -dr com.apple.quarantine /Applications/GlassyBattery.app
 #
 # That is fine for test builds and for people who know to do it. Shipping a DMG the public can
 # open normally additionally needs a Developer ID Application certificate imported into a
@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   dmg:
-    # AirBattery calls SwiftUI's glassEffect(), which only exists in the macOS 26 SDK, so this
+    # GlassyBattery calls SwiftUI's glassEffect(), which only exists in the macOS 26 SDK, so this
     # needs an image carrying Xcode 26. macos-latest tracks GitHub's newest stable image, which
     # gets there on its own as the label advances; the SDK check below is what turns a too-old
     # image into a clear failure instead of a confusing compile error.
@@ -47,7 +47,7 @@ jobs:
           sudo xcode-select -s "$latest"
           xcodebuild -version
           if ! xcodebuild -showsdks | grep -q "macosx26"; then
-            echo "::error::No macOS 26 SDK found. AirBattery uses glassEffect(), which requires Xcode 26."
+            echo "::error::No macOS 26 SDK found. GlassyBattery uses glassEffect(), which requires Xcode 26."
             echo "This means macos-latest still points at an image older than macOS 26."
             echo "Pin runs-on to a macos-26 image, or use a self-hosted macOS 26 runner."
             echo "Xcodes present on this image:"
@@ -62,7 +62,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/SourcePackages
-          key: spm-${{ runner.os }}-${{ hashFiles('AirBattery.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+          key: spm-${{ runner.os }}-${{ hashFiles('GlassyBattery.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
 
       # TEMPORARY: ENABLE_HARDENED_RUNTIME=NO overrides the project's ENABLE_HARDENED_RUNTIME=YES
@@ -85,8 +85,8 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild \
-            -project AirBattery.xcodeproj \
-            -scheme AirBattery \
+            -project GlassyBattery.xcodeproj \
+            -scheme GlassyBattery \
             -configuration Release \
             -derivedDataPath build \
             CODE_SIGN_IDENTITY="-" \
@@ -104,11 +104,11 @@ jobs:
       - name: Verify bundle
         run: |
           set -euo pipefail
-          APP=build/Build/Products/Release/AirBattery.app
+          APP=build/Build/Products/Release/GlassyBattery.app
           codesign --verify --deep --strict "$APP"
-          lipo -archs "$APP/Contents/MacOS/AirBattery"
-          test -d "$APP/Contents/PlugIns/AirBatteryWidgetExtension.appex"
-          test -d "$APP/Contents/Library/LoginItems/AirBatteryHelper.app"
+          lipo -archs "$APP/Contents/MacOS/GlassyBattery"
+          test -d "$APP/Contents/PlugIns/GlassyBatteryWidgetExtension.appex"
+          test -d "$APP/Contents/Library/LoginItems/GlassyBatteryHelper.app"
           test -x "$APP/Contents/Resources/logReader.sh"
 
       # `codesign --verify` above passes on a bundle that cannot actually launch: it checks that
@@ -123,10 +123,10 @@ jobs:
       - name: Smoke test launch
         run: |
           set -euo pipefail
-          APP=build/Build/Products/Release/AirBattery.app
+          APP=build/Build/Products/Release/GlassyBattery.app
           LOG=$(mktemp)
 
-          "$APP/Contents/MacOS/AirBattery" >"$LOG" 2>&1 &
+          "$APP/Contents/MacOS/GlassyBattery" >"$LOG" 2>&1 &
           PID=$!
           sleep 10
 
@@ -151,17 +151,17 @@ jobs:
         id: dmg
         run: |
           set -euo pipefail
-          APP=build/Build/Products/Release/AirBattery.app
+          APP=build/Build/Products/Release/GlassyBattery.app
           VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
-          NAME="AirBattery-${VERSION}.dmg"
+          NAME="GlassyBattery-${VERSION}.dmg"
 
           rm -rf dmg-stage
           mkdir dmg-stage
-          ditto "$APP" "dmg-stage/AirBattery.app"
+          ditto "$APP" "dmg-stage/GlassyBattery.app"
           ln -s /Applications dmg-stage/Applications
 
           hdiutil create \
-            -volname "AirBattery" \
+            -volname "GlassyBattery" \
             -srcfolder dmg-stage \
             -ov -format UDZO \
             "$NAME"
@@ -172,7 +172,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AirBattery-${{ steps.dmg.outputs.version }}-dmg
+          name: GlassyBattery-${{ steps.dmg.outputs.version }}-dmg
           path: ${{ steps.dmg.outputs.name }}
           if-no-files-found: error
 
@@ -188,16 +188,16 @@ jobs:
           # "damaged", so anyone who downloads the DMG in a browser hits a dead end with no hint
           # that one command fixes it. Prepended to the generated changelog, not instead of it.
           cat > release-notes.md <<NOTES
-          Download \`${FILE}\` below, open it and drag **AirBattery** to Applications.
+          Download \`${FILE}\` below, open it and drag **GlassyBattery** to Applications.
 
           ### ⚠️ First launch requires one extra step
 
           This build is **ad-hoc signed, not notarized** — it is built by GitHub Actions, which has
-          no access to a Developer ID certificate. macOS will refuse to open it with *"AirBattery is
+          no access to a Developer ID certificate. macOS will refuse to open it with *"GlassyBattery is
           damaged and can't be opened"* until you clear the download quarantine flag:
 
           \`\`\`sh
-          xattr -dr com.apple.quarantine /Applications/AirBattery.app
+          xattr -dr com.apple.quarantine /Applications/GlassyBattery.app
           \`\`\`
 
           Run that once, after copying the app to Applications, and it launches normally from then
@@ -280,8 +280,8 @@ jobs:
 #   runtime, and once app and Sparkle.framework share one real Team ID, Library Validation is
 #   satisfied and the crash this flag works around cannot occur.
 #
-#   Xcode signs embedded content (Sparkle.framework, AirBatteryWidgetExtension.appex,
-#   AirBatteryHelper.app) inside-out as part of the build. If you ever re-sign by hand, sign in
+#   Xcode signs embedded content (Sparkle.framework, GlassyBatteryWidgetExtension.appex,
+#   GlassyBatteryHelper.app) inside-out as part of the build. If you ever re-sign by hand, sign in
 #   that same order — frameworks, then appex and login item, then the outer .app — because
 #   signing the outer bundle seals the hashes of everything nested inside it.
 #
@@ -319,8 +319,8 @@ jobs:
 #
 #   The "Smoke test launch" step catches launch-time linking failures, but check the Gatekeeper
 #   story too, on a machine that did NOT build the app:
-#       spctl -a -t exec -vvv /Applications/AirBattery.app     # expect: accepted, Notarized...
-#       codesign -dvvv /Applications/AirBattery.app 2>&1 | grep TeamIdentifier   # expect your ID
+#       spctl -a -t exec -vvv /Applications/GlassyBattery.app     # expect: accepted, Notarized...
+#       codesign -dvvv /Applications/GlassyBattery.app 2>&1 | grep TeamIdentifier   # expect your ID
 #   Confirm the same TeamIdentifier on Contents/Frameworks/Sparkle.framework. Two different
 #   values there is the exact condition that produced the ad-hoc launch crash.
 # =============================================================================================

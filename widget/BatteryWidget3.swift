@@ -1,6 +1,6 @@
 //
 //  BatteryWidget3.swift
-//  AirBattery
+//  GlassyBattery
 //
 //  Created by apple on 2024/6/8.
 //
@@ -25,7 +25,7 @@ struct batteryWidgetEntryView3 : View {
             @unknown default:
                 EmptyView()
             }
-        }.widgetURL(URL(string: "airbattery://reloadwingets"))
+        }.widgetURL(URL(string: "glassybattery://reloadwingets"))
     }
 }
 
@@ -35,7 +35,7 @@ struct SmallWidgetView2: View {
     
     var body: some View {
         if !entry.mainApp {
-            Text("AirBattery is not running\nLaunch the app to make\nthe widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make\nthe widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color.gray)
@@ -168,7 +168,7 @@ struct doubleBatteryWidgetEntryView2: View {
     
     var body: some View {
         if !entry.mainApp{
-            Text("AirBattery is not running\nLaunch the app to make the widget work")
+            Text("GlassyBattery is not running\nLaunch the app to make the widget work")
                 .multilineTextAlignment(.center)
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Color.gray)
