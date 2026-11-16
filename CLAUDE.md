@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GlassyBattery (a rebranded fork of lihaoyun6's AirBattery, AGPL-3.0) is a macOS menu bar / Dock app (SwiftUI + AppKit) that discovers the battery level of the Mac's own battery plus every nearby Apple/Bluetooth peripheral (iPhone, iPad, Apple Watch, AirPods, Magic Mouse/Keyboard/Trackpad, third-party BT HID devices, etc.) and displays them in the Dock, status bar, and widgets. It also supports "Nearcast" — broadcasting/receiving battery state to/from other Macs on the LAN.
 
-**Naming:** everything is **GlassyBattery**: the app (`GlassyBattery.app`), bundle IDs `com.deckirin.GlassyBattery*`, the Xcode project, scheme, targets, source folders and Swift types (`GlassyBatteryModel`, `GlassyBatteryApp`, ...), the CLI `glassybattery` and the URL scheme `glassybattery://`. The exceptions are the `abt` CLI target and folder, the GitHub repo `DecKirin/AirBattery` (and the Sparkle feed URL on it), the upstream release history in `appcast.xml`, and the attribution to lihaoyun6's AirBattery. The Swift module is `GlassyBattery` (from `PRODUCT_NAME`), which is why `Scriptable.sdef` refers to `GlassyBattery.listAll` etc. Keep lihaoyun6's copyright and the "modified version" notice (About panel `Credits.rtf`, `NSHumanReadableCopyright`, README) intact, since AGPL §5 requires them.
+**Naming:** everything is **GlassyBattery**: the app (`GlassyBattery.app`), bundle IDs `com.deckirin.GlassyBattery*`, the Xcode project, scheme, targets, source folders and Swift types (`GlassyBatteryModel`, `GlassyBatteryApp`, ...), the CLI `glassybattery` and the URL scheme `glassybattery://`. The exceptions are the `abt` CLI target and folder, and the attribution to lihaoyun6's AirBattery. The GitHub repo is `DecKirin/GlassyBattery` (a fork of `lihaoyun6/AirBattery`). The Swift module is `GlassyBattery` (from `PRODUCT_NAME`), which is why `Scriptable.sdef` refers to `GlassyBattery.listAll` etc. Keep lihaoyun6's copyright and the "modified version" notice (About panel `Credits.rtf`, `NSHumanReadableCopyright`, README) intact, since AGPL §5 requires them.
 
 **Demo mode:** launching with `-demoDevices YES` (see `DemoMode` in `Supports.swift`) replaces every scanner result and the internal battery with fixed sample devices, for README/marketing screenshots.
 
@@ -30,6 +30,19 @@ To produce a distributable disk image, use `scripts/build-dmg.sh` — the local 
 ```
 
 Ad-hoc builds must pass `ENABLE_HARDENED_RUNTIME=NO`: hardened runtime enables Library Validation, which requires embedded frameworks to share the host's Team ID, and ad-hoc signatures have none — so dyld refuses to map `Sparkle.framework` and the app dies before `main()`. Both the script and the workflow encode this; hardened runtime must stay ON for anything notarized.
+
+## Versions and releases
+
+Every merge to `main` is a release. `.github/workflows/build-dmg.yml` builds the app, publishes `GlassyBattery-<version>.dmg` as GitHub release `v<version>` with the PRs merged since the last one as its notes, and attaches the Sparkle `appcast.xml` that installed copies read (`SUFeedURL` = the newest release's `appcast.xml`).
+
+**Every PR sets a new version.** Review the PR's change and bump the version above the newest release (`git tag -l 'v*' | sort -V | tail -1`) by semantic versioning:
+- MAJOR: drops support (a macOS version, a device source), or breaks a public interface (BatteryBridge API, AppleScript, the `glassybattery` CLI, URL scheme) in a way existing users or clients must adapt to;
+- MINOR: something new a user or client can see or use — a feature, a setting, a device type, a new API endpoint or field;
+- PATCH: fixes, performance, layout and wording, docs, CI, refactors.
+
+Set it with `scripts/set-version.sh <MAJOR.MINOR.PATCH>`, which writes `MARKETING_VERSION` on every target and the build number derived from it (`MAJOR*10000 + MINOR*100 + PATCH`, what Sparkle compares). Say the version and why in the PR description. The workflow's version job fails a PR that isn't above the newest release, and the release fails if the tag exists.
+
+Updates are signed with an EdDSA key: the public half is `SUPublicEDKey` in `Info.plist`, the private half is in the maintainer's login keychain (Sparkle `generate_keys --account glassybattery`) and the `SPARKLE_PRIVATE_KEY` Actions secret. CI signs the DMG and checks the secret matches the app's key. Never change `SUPublicEDKey` without a plan for installed copies: they only accept updates signed by the key they carry.
 
 The only shared scheme is `GlassyBattery` (builds/runs the main app target only; the helper, widget, and CLI targets build implicitly as embedded dependencies/CopyFiles, not via a separate scheme).
 

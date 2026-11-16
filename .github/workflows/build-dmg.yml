@@ -1,43 +1,111 @@
 name: Build DMG
 
-# Builds GlassyBattery.app and packages it as a drag-to-Applications DMG.
+# Builds GlassyBattery.app, packages it as a drag-to-Applications DMG and, on every merge to main,
+# publishes it as a GitHub release that Sparkle offers to installed copies.
 #
-# The DMG is AD-HOC SIGNED, not signed with a Developer ID and not notarized, because CI has no
-# access to the signing certificate. Gatekeeper will refuse to open it on a machine that did not
-# build it — recipients have to right-click > Open, or clear the quarantine attribute:
+#   pull_request → main   check the PR bumped the version, then build and verify (no release)
+#   push → main           build, verify, sign the update, release v<version> with the DMG and
+#                         its appcast.xml
+#   workflow_dispatch     build and verify any branch; the DMG is kept as a workflow artifact
+#
+# VERSIONS. Each PR sets the app's semantic version with scripts/set-version.sh (the build number
+# follows from it). The version job fails a PR whose version isn't above the newest release, so
+# every merge releases something new; the release job fails if v<version> already exists.
+#
+# SPARKLE. The app reads its updates from the newest release's appcast.xml
+# (SUFeedURL in GlassyBattery/Info.plist). Each DMG is signed with the EdDSA key whose public
+# half is SUPublicEDKey there. The private key lives in the maintainer's login keychain
+# (generate_keys --account glassybattery) and in the SPARKLE_PRIVATE_KEY repository secret; the
+# release job stops if that secret is missing rather than publish an update nobody can install.
+#
+# SIGNING. The DMG is AD-HOC SIGNED, not signed with a Developer ID and not notarized, because CI
+# has no access to a signing certificate. Gatekeeper refuses a downloaded copy until the
+# quarantine flag is cleared (the release notes say how):
 #
 #     xattr -dr com.apple.quarantine /Applications/GlassyBattery.app
 #
-# That is fine for test builds and for people who know to do it. Shipping a DMG the public can
-# open normally additionally needs a Developer ID Application certificate imported into a
-# temporary keychain, plus a notarytool submission — see "SHIPPING A SIGNED, NOTARIZED DMG" at
-# the bottom of this file.
+# Updates installed by Sparkle don't need that: Sparkle clears the flag itself. Shipping a DMG
+# the public can open normally needs a Developer ID certificate and notarization — see
+# "SHIPPING A SIGNED, NOTARIZED DMG" at the bottom of this file.
 #
 # Ad-hoc builds here also pass ENABLE_HARDENED_RUNTIME=NO. That is a TEMPORARY workaround, not a
 # preference; it is undone by the Developer ID path below. See the comment on the build step.
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
   push:
-    tags: ['v*']
+    branches: [main]
 
 permissions:
-  contents: write # only used to attach the DMG to a tag's release
+  contents: write # creating the release and its tag
 
 concurrency:
   group: build-dmg-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR replaces the build in progress; merges to main queue, since each one
+  # releases.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version is bumped
+        run: |
+          set -euo pipefail
+          # set-version.sh edits with BSD sed; --check only reads, which GNU sed does the same way.
+          read -r VERSION BUILD < <(bash scripts/set-version.sh --print)
+          LATEST=$(git tag -l 'v*' | sed 's/^v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          echo "This PR: $VERSION (build $BUILD). Newest release: ${LATEST:-none}."
+          if [[ -n "$LATEST" ]]; then
+            if [[ "$VERSION" == "$LATEST" || "$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]]; then
+              echo "::error file=GlassyBattery.xcodeproj/project.pbxproj::Version $VERSION isn't above the newest release, $LATEST. Merging releases a new version: run scripts/set-version.sh with a MAJOR, MINOR or PATCH bump of $LATEST that fits this change."
+              exit 1
+            fi
+          fi
+
   dmg:
     # GlassyBattery calls SwiftUI's glassEffect(), which only exists in the macOS 26 SDK, so this
     # needs an image carrying Xcode 26. macos-latest tracks GitHub's newest stable image, which
     # gets there on its own as the label advances; the SDK check below is what turns a too-old
     # image into a clear failure instead of a confusing compile error.
     runs-on: macos-latest
+    env:
+      RELEASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Before the build, so a merge that forgot to bump the version fails in seconds.
+      - name: Version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HAS_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY != '' }}
+        run: |
+          set -euo pipefail
+          read -r VERSION BUILD < <(scripts/set-version.sh --print)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Version $VERSION, build $BUILD"
+          if [[ "$RELEASE" == "true" ]]; then
+            if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null || gh release view "v$VERSION" >/dev/null 2>&1; then
+              echo "::error::v$VERSION is already released. Bump the version with scripts/set-version.sh in a PR."
+              exit 1
+            fi
+            if [[ "$HAS_KEY" != "true" ]]; then
+              echo "::error::The SPARKLE_PRIVATE_KEY secret is missing, so the update can't be signed. See the SPARKLE note at the top of this workflow."
+              exit 1
+            fi
+          fi
 
       - name: Select newest Xcode
         run: |
@@ -100,7 +168,8 @@ jobs:
 
       # The helper and the widget extension are embedded rather than built by the shared scheme
       # directly, so assert they actually made it into the bundle instead of shipping a DMG whose
-      # login item or widget is silently missing.
+      # login item or widget is silently missing. And that the app carries the version and the
+      # update feed this release is published for.
       - name: Verify bundle
         run: |
           set -euo pipefail
@@ -110,6 +179,11 @@ jobs:
           test -d "$APP/Contents/PlugIns/GlassyBatteryWidgetExtension.appex"
           test -d "$APP/Contents/Library/LoginItems/GlassyBatteryHelper.app"
           test -x "$APP/Contents/Resources/logReader.sh"
+          plist() { /usr/libexec/PlistBuddy -c "Print :$1" "$APP/Contents/Info.plist"; }
+          test "$(plist CFBundleShortVersionString)" = "${{ steps.version.outputs.version }}"
+          test "$(plist CFBundleVersion)" = "${{ steps.version.outputs.build }}"
+          echo "Feed: $(plist SUFeedURL)"
+          echo "Key:  $(plist SUPublicEDKey)"
 
       # `codesign --verify` above passes on a bundle that cannot actually launch: it checks that
       # signatures are well-formed, while Library Validation is a load-time policy dyld applies
@@ -152,8 +226,7 @@ jobs:
         run: |
           set -euo pipefail
           APP=build/Build/Products/Release/GlassyBattery.app
-          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
-          NAME="GlassyBattery-${VERSION}.dmg"
+          NAME="GlassyBattery-${{ steps.version.outputs.version }}.dmg"
 
           rm -rf dmg-stage
           mkdir dmg-stage
@@ -167,57 +240,118 @@ jobs:
             "$NAME"
 
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GlassyBattery-${{ steps.dmg.outputs.version }}-dmg
+          name: GlassyBattery-${{ steps.version.outputs.version }}-dmg
           path: ${{ steps.dmg.outputs.name }}
           if-no-files-found: error
 
-      - name: Attach to release
-        if: startsWith(github.ref, 'refs/tags/')
+      # The update's EdDSA signature, checked against the public key the app carries, so a key
+      # that doesn't match SUPublicEDKey fails here instead of in every installed copy.
+      - name: Sign the update
+        if: env.RELEASE == 'true'
+        id: sign
         env:
-          GH_TOKEN: ${{ github.token }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           FILE: ${{ steps.dmg.outputs.name }}
         run: |
           set -euo pipefail
+          BIN=build/SourcePackages/artifacts/sparkle/Sparkle/bin
+          SIGNATURE=$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$BIN/sign_update" --ed-key-file - -p "$FILE")
+          PUBLIC=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" build/Build/Products/Release/GlassyBattery.app/Contents/Info.plist)
+          # The public half of the secret must be the key in the app, or no installed copy accepts it.
+          python3 - "$SPARKLE_PRIVATE_KEY" "$PUBLIC" <<'PY'
+          import base64, sys
+          from hashlib import sha512
+          # An ed25519 seed (32 bytes) → its public key, without a crypto library: RFC 8032 §5.1.5.
+          seed = base64.b64decode(sys.argv[1].strip())[:32]
+          p = 2**255 - 19; q = 2**252 + 27742317777372353535851937790883648493
+          d = -121665 * pow(121666, p - 2, p) % p
+          def add(P, Q):
+              x1, y1, z1, t1 = P; x2, y2, z2, t2 = Q
+              a = (y1 - x1) * (y2 - x2) % p; b = (y1 + x1) * (y2 + x2) % p
+              c = 2 * t1 * t2 * d % p; dd = 2 * z1 * z2 % p
+              e, f, g, h = b - a, dd - c, dd + c, b + a
+              return (e * f % p, g * h % p, f * g % p, e * h % p)
+          def mul(s, P):
+              Q = (0, 1, 1, 0)
+              while s:
+                  if s & 1: Q = add(Q, P)
+                  P = add(P, P); s >>= 1
+              return Q
+          gy = 4 * pow(5, p - 2, p) % p
+          gx = pow((gy * gy - 1) * pow(d * gy * gy + 1, p - 2, p), (p + 3) // 8, p)
+          if (gx * gx - (gy * gy - 1) * pow(d * gy * gy + 1, p - 2, p)) % p: gx = gx * pow(2, (p - 1) // 4, p) % p
+          if gx & 1: gx = p - gx
+          h = sha512(seed).digest()
+          a = int.from_bytes(h[:32], "little"); a &= (1 << 254) - 8; a |= 1 << 254
+          x, y, z, _ = mul(a, (gx, gy, 1, gx * gy % p))
+          zi = pow(z, p - 2, p); x, y = x * zi % p, y * zi % p
+          public = base64.b64encode((y | ((x & 1) << 255)).to_bytes(32, "little")).decode()
+          if public != sys.argv[2]:
+              print(f"::error::SPARKLE_PRIVATE_KEY's public key is {public}, but the app's SUPublicEDKey is {sys.argv[2]}.")
+              sys.exit(1)
+          print("The secret matches the app's SUPublicEDKey.")
+          PY
+          echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
 
-          # Without this the release is a trap: an ad-hoc signature makes macOS report the app as
-          # "damaged", so anyone who downloads the DMG in a browser hits a dead end with no hint
-          # that one command fixes it. Prepended to the generated changelog, not instead of it.
-          cat > release-notes.md <<NOTES
-          Download \`${FILE}\` below, open it and drag **GlassyBattery** to Applications.
+      - name: Release
+        if: env.RELEASE == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FILE: ${{ steps.dmg.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SIGNATURE: ${{ steps.sign.outputs.signature }}
+        run: |
+          set -euo pipefail
+          TAG="v$VERSION"
+          BASE="https://github.com/$GITHUB_REPOSITORY/releases"
 
-          ### ⚠️ First launch requires one extra step
+          # What changed: the PRs merged since the last release, as GitHub lists them.
+          gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$TAG" -f target_commitish="$GITHUB_SHA" -q .body > changes.md
 
-          This build is **ad-hoc signed, not notarized** — it is built by GitHub Actions, which has
-          no access to a Developer ID certificate. macOS will refuse to open it with *"GlassyBattery is
-          damaged and can't be opened"* until you clear the download quarantine flag:
+          # The update window shows these; Sparkle renders HTML.
+          gh api markdown -f text="$(cat changes.md)" -f mode=gfm -f context="$GITHUB_REPOSITORY" > changes.html
+          scripts/appcast.sh build/Build/Products/Release/GlassyBattery.app "$FILE" \
+            "$BASE/download/$TAG/$FILE" "$SIGNATURE" changes.html "$BASE/tag/$TAG" > appcast.xml
+          xmllint --noout appcast.xml
+
+          # Without the first-launch note the release is a trap: an ad-hoc signature makes macOS
+          # report a downloaded app as "damaged", with no hint that one command fixes it.
+          {
+            cat <<NOTES
+          Download \`$FILE\` below, open it and drag **GlassyBattery** to Applications. Installed copies update themselves.
+
+          <details><summary>⚠️ First launch of a downloaded copy needs one extra step</summary>
+
+          This build is **ad-hoc signed, not notarized**: it's built by GitHub Actions, which has no
+          Developer ID certificate. macOS refuses to open a downloaded copy with *"GlassyBattery is
+          damaged and can't be opened"* until you clear the download quarantine flag, once, after
+          copying the app to Applications:
 
           \`\`\`sh
           xattr -dr com.apple.quarantine /Applications/GlassyBattery.app
           \`\`\`
 
-          Run that once, after copying the app to Applications, and it launches normally from then
-          on. The app itself is unmodified — the warning is about the *signature*, not the contents;
-          \`codesign --verify --deep --strict\` passes on the bundle.
+          The app itself is unmodified; \`codesign --verify --deep --strict\` passes on the bundle.
+          Updates through *Check for Updates…* don't need this.
+
+          </details>
 
           Universal binary: Apple Silicon and Intel.
 
-          ---
-
           NOTES
+            cat changes.md
+          } > release-notes.md
 
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "$FILE" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" "$FILE" \
-              --title "$GITHUB_REF_NAME" \
-              --notes-file release-notes.md \
-              --generate-notes
-          fi
+          gh release create "$TAG" "$FILE" appcast.xml \
+            --target "$GITHUB_SHA" \
+            --title "GlassyBattery $VERSION" \
+            --notes-file release-notes.md \
+            --latest
 
 # =============================================================================================
 # SHIPPING A SIGNED, NOTARIZED DMG — for maintainers who have a valid Developer ID
@@ -308,12 +442,11 @@ jobs:
 #
 # ---- 5. Sparkle's update feed is a SEPARATE key ----------------------------------------------
 #
-#   Code signing does not sign updates. Sparkle verifies each appcast item with an EdDSA
-#   signature made by the key in Sparkle's `generate_keys` tool, held by whoever publishes
-#   releases. Signing and notarizing the DMG does NOT make appcast.xml valid — run Sparkle's
-#   `sign_update <file>` and paste the resulting `sparkle:edSignature` into the appcast entry.
-#   Keep that private key OUT of the repo and out of CI unless you deliberately add it as a
-#   secret; losing it means existing installs can never auto-update again.
+#   Code signing does not sign updates. Sparkle verifies each update with the EdDSA key from
+#   Sparkle's `generate_keys` (SPARKLE_PRIVATE_KEY; see SPARKLE at the top), which the "Sign the
+#   update" step already applies to the DMG. Notarizing changes the DMG, so sign after it: move
+#   "Sign the update" below "Notarize and staple". Losing that key means installed copies can
+#   never update themselves again; keep the export in a password manager.
 #
 # ---- 6. Verifying the result -----------------------------------------------------------------
 #

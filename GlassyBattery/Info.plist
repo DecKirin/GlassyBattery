@@ -26,8 +26,8 @@
 	<key>OSAScriptingDefinition</key>
 	<string>Scriptable</string>
 	<key>SUFeedURL</key>
-	<string>https://raw.githubusercontent.com/DecKirin/AirBattery/main/appcast.xml</string>
+	<string>https://github.com/DecKirin/GlassyBattery/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>dP6zY7RAyK3DtV/dDrQ2V2dB0BY36jADwMKHZIX89u4=</string>
+	<string>+fIsnv4AryILfis9Kmm9dWDDdxW5o3QVv8rEuqvwpR4=</string>
 </dict>
 </plist>
