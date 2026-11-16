@@ -149,6 +149,9 @@ class BLEBattery: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         let now = Double(Date().timeIntervalSince1970)
         if let deviceName = peripheral.name{
             if GlassyBatteryModel.checkIfBlocked(name: deviceName) { return }
+            // A name two stored devices share (two iPhones both "Xiding's iPhone") can't be pinned
+            // to either of them from here; their own readings, by UDID, keep them up to date.
+            if GlassyBatteryModel.isNameShared(deviceName) { return }
             if let data = advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data, data.count > 0 {
                 if data[0] != 76 {
                     //获取非Apple的普通BLE设备数据
@@ -214,7 +217,7 @@ class BLEBattery: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
         //if !blockedItems.contains(name) && whitelistMode { return }
         
         if characteristic.uuid == CBUUID(string: "2A19"){
-            if let data = characteristic.value, let deviceName = peripheral.name {
+            if let data = characteristic.value, let deviceName = peripheral.name, !GlassyBatteryModel.isNameShared(deviceName) {
                 let now = Date().timeIntervalSince1970
                 let level = Int(data[0])
                 if level > 100 { return }

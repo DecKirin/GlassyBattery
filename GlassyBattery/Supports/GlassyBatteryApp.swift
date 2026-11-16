@@ -110,6 +110,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUserNotifi
     }
     
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Names "Xiding's iPhone (iPhone Duo)" apart from "Xiding's iPhone (iPhone 15 Pro Max)".
+        GlassyBatteryModel.modelName = { appleDeviceModelName($0) == nil ? nil : displayModelName($0) }
         // 老版本的百分比是三选一 (outside / inside / hidden), 现在只有开关了 —— 迁移一次:
         // 除了原来就选了"隐藏"的, 其余都算开着. 位置不再是用户选的, 按系统版本和图标样式决定.
         if ud.object(forKey: "showBatteryPercent") == nil {

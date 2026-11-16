@@ -191,5 +191,62 @@ func runCoreTests() throws {
         check(GlassyBatteryModel.snapshot().count == 2, "snapshot includes expired devices")
         GlassyBatteryModel.removeDevices { BridgeDevices.clientID(of: $0.deviceID) == "c1" }
         check(GlassyBatteryModel.snapshot().map(\.deviceName) == ["Local"], "removeDevices drops one client's devices")
+        GlassyBatteryModel.removeDevices { _ in true }
+    }
+
+    // MARK: Devices sharing a name
+
+    do {
+        GlassyBatteryModel.modelName = { ["iPhone19,4": "iPhone Duo", "iPhone16,2": "iPhone 15 Pro Max"][$0] }
+        defer {
+            GlassyBatteryModel.modelName = { _ in nil }
+            GlassyBatteryModel.removeDevices { _ in true }
+        }
+        let now = Date().timeIntervalSince1970
+        func phone(_ id: String, _ model: String, level: Int = 50, name: String = "Xiding's iPhone") -> Device {
+            Device(deviceID: id, deviceType: "iPhone", deviceName: name, deviceModel: model, batteryLevel: level, isCharging: 0, lastUpdate: now)
+        }
+        let duo = "00008150-0011223344556677", max = "00008130-00140CA93C38001C", watch = "00008301-AAAABBBBCCCCDDDD"
+        GlassyBatteryModel.updateDevice(phone(duo, "iPhone19,4"))
+        GlassyBatteryModel.updateDevice(phone(max, "iPhone16,2"))
+        GlassyBatteryModel.updateDevice(Device(deviceID: watch, deviceType: "Watch", deviceName: "Watch", deviceModel: "Watch7,5",
+                                               batteryLevel: 70, isCharging: 0, parentName: "Xiding's iPhone", parentID: max, lastUpdate: now))
+        check(GlassyBatteryModel.snapshot().count == 3, "two phones with one name are two devices")
+        GlassyBatteryModel.updateDevice(phone(max, "iPhone16,2", level: 20))
+        check(GlassyBatteryModel.snapshot().count == 3 && GlassyBatteryModel.getByID(max)?.batteryLevel == 20,
+              "a reading updates its own phone")
+        check(GlassyBatteryModel.getByID(duo)?.batteryLevel == 50, "and leaves the other alone")
+
+        var names = GlassyBatteryModel.getAll(noFilter: true).map(\.deviceName)
+        check(Set(names) == ["Xiding's iPhone (iPhone Duo)", "Xiding's iPhone (iPhone 15 Pro Max)", "Watch"],
+              "different models are named by model (got \(names))")
+        check(GlassyBatteryModel.getByID(max)?.nameWithoutModel == "Xiding's iPhone", "the dropdown titles it without the model")
+        check(GlassyBatteryModel.getByID(watch)?.parentName == "Xiding's iPhone (iPhone 15 Pro Max)", "a Watch follows its phone's name")
+        check(GlassyBatteryModel.isNameShared("Xiding's iPhone"), "a shared name is known as one")
+
+        let second = "00008130-0000000000000002"
+        GlassyBatteryModel.updateDevice(phone(second, "iPhone16,2"))
+        names = GlassyBatteryModel.getAll(noFilter: true).map(\.deviceName)
+        check(Set(names) == ["Xiding's iPhone (iPhone Duo)", "Xiding's iPhone 1 (iPhone 15 Pro Max)",
+                             "Xiding's iPhone 2 (iPhone 15 Pro Max)", "Watch"], "and numbered within a model (got \(names))")
+        check(GlassyBatteryModel.getByID(second)?.deviceName == "Xiding's iPhone 1 (iPhone 15 Pro Max)", "numbered in ID order")
+        GlassyBatteryModel.removeDevices { $0.deviceID == duo }
+        names = GlassyBatteryModel.getAll(noFilter: true).map(\.deviceName)
+        check(Set(names) == ["Xiding's iPhone 1", "Xiding's iPhone 2", "Watch"], "the same model is numbered (got \(names))")
+        check(GlassyBatteryModel.getByID(second)?.nameWithoutModel == nil, "with no model to drop")
+
+        GlassyBatteryModel.updateDevice(phone(second, "iPhone16,2", name: "Spare iPhone"))
+        check(GlassyBatteryModel.snapshot().count == 3 && GlassyBatteryModel.getByID(max)?.deviceName == "Xiding's iPhone",
+              "a renamed phone is updated in place, and the other gets its name back")
+
+        // Bluetooth sources are still merged by name, whatever their IDs.
+        GlassyBatteryModel.updateDevice(Device(deviceID: "AA:BB:CC:DD:EE:FF", deviceType: "MMouse", deviceName: "Mouse",
+                                               batteryLevel: 40, isCharging: 0, lastUpdate: now))
+        GlassyBatteryModel.updateDevice(Device(deviceID: "aa-bb-cc-dd-ee-ff", deviceType: "MMouse", deviceName: "Mouse",
+                                               batteryLevel: 41, isCharging: 0, lastUpdate: now))
+        check(GlassyBatteryModel.snapshot().filter { $0.deviceName == "Mouse" }.count == 1, "Bluetooth devices merge by name")
+        // A Bluetooth LE reading of a phone's name still lands on it while only one phone has that name.
+        GlassyBatteryModel.updateDevice(phone("6F1C2B9E-0000-4000-8000-000000000001", "iPhone16,2", name: "Spare iPhone"))
+        check(GlassyBatteryModel.snapshot().filter { $0.deviceName == "Spare iPhone" }.count == 1, "a BLE reading merges into the phone")
     }
 }
