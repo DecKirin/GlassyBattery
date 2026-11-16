@@ -96,7 +96,6 @@ class BLEBattery: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     var centralManager: CBCentralManager!
     var peripherals: [CBPeripheral?] = []
     var otherAppleDevices: [String] = []
-    var bleDevicesLevel: [String:UInt8] = [:]
     var bleDevicesVendor: [String:String] = [:]
     var scanTimer: Timer?
     //var a = 1
@@ -221,21 +220,18 @@ class BLEBattery: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
                 let now = Date().timeIntervalSince1970
                 let level = Int(data[0])
                 if level > 100 { return }
-                var charging = 0
-                //if let lastLevel = bleDevicesLevel[deviceName], cStatusOfBLE {
-                if let lastLevel = bleDevicesLevel[deviceName] {
-                    if level > lastLevel { charging = 1 }
-                    //if level < lastLevel { charging = 0 }
-                }
-                bleDevicesLevel[deviceName] = data[0]
+                // The Battery Service (2A19) carries a level and nothing else, so a device read
+                // here reports neither charging nor power. It used to be guessed from the level
+                // going up, which showed a bolt on a device that might not be charging at all.
                 if var device = GlassyBatteryModel.getByName(deviceName) {
                     device.deviceID = peripheral.identifier.uuidString
                     device.batteryLevel = level
                     device.lastUpdate = now
-                    if charging != -1 { device.isCharging = charging }
+                    device.isCharging = 0
+                    device.acPowered = false
                     GlassyBatteryModel.updateDevice(device)
                 } else {
-                    let device = Device(deviceID: peripheral.identifier.uuidString, deviceType: getType(deviceName), deviceName: deviceName, batteryLevel: level, isCharging: charging, lastUpdate: now)
+                    let device = Device(deviceID: peripheral.identifier.uuidString, deviceType: getType(deviceName), deviceName: deviceName, batteryLevel: level, isCharging: 0, lastUpdate: now)
                     GlassyBatteryModel.updateDevice(device)
                 }
             }

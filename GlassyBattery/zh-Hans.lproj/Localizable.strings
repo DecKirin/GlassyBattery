@@ -210,3 +210,5 @@
 "Waiting" = "待批准";
 "Blocked" = "已屏蔽";
 "\"%@\" wants to add devices to GlassyBattery." = "“%@” 想要向 GlassyBattery 添加设备";
+"Charging" = "正在充电";
+"On Power Adapter" = "使用电源适配器";
