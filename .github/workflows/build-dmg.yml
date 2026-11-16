@@ -72,10 +72,16 @@ jobs:
 
   dmg:
     # GlassyBattery calls SwiftUI's glassEffect(), which only exists in the macOS 26 SDK, so this
-    # needs an image carrying Xcode 26. macos-latest tracks GitHub's newest stable image, which
-    # gets there on its own as the label advances; the SDK check below is what turns a too-old
-    # image into a clear failure instead of a confusing compile error.
-    runs-on: macos-latest
+    # needs an image carrying Xcode 26; the SDK check below turns a too-old image into a clear
+    # failure instead of a confusing compile error.
+    #
+    # macos-26-intel, not macos-latest (arm64): in November 2026 the arm64 pool was so short of
+    # capacity that jobs sat queued for 15 minutes and were cancelled before a single step ran,
+    # three runs out of four, releases included. The Intel image has the same macOS 26 and
+    # Xcode, and builds the same universal app. To move without editing this, set the
+    # MACOS_RUNNER repository variable (Settings > Secrets and variables > Actions > Variables)
+    # to another label, such as macos-latest or a self-hosted runner's.
+    runs-on: ${{ vars.MACOS_RUNNER || 'macos-26-intel' }}
     env:
       RELEASE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
