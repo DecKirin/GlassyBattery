@@ -36,9 +36,17 @@ struct Device: Hashable, Codable {
     var isHidden: Bool = false
     var lowPower: Bool = false
     var parentName: String = ""
+    /// The parent's `deviceID`, where the producer knows it (a Watch's phone, a Pencil's iPad). Two
+    /// parents can share a name, so this is what `GlassyBatteryModel.getAll` points `parentName` with.
+    var parentID: String? = nil
     var lastUpdate: Double
     var realUpdate: Double = 0.0
-    
+    /// Set by `GlassyBatteryModel.getAll` when another device reports the same name with a different
+    /// model: `deviceName` then carries the model too ("Xiding's iPhone (iPhone Duo)"), so it stays a
+    /// unique key for pins, alerts and widgets, and this is the name without it, for the dropdown,
+    /// whose second line shows the model already.
+    var nameWithoutModel: String? = nil
+
     public func hash(into hasher: inout Hasher) {
         hasher.combine(hasBattery)
         hasher.combine(deviceID)
@@ -57,6 +65,8 @@ struct Device: Hashable, Codable {
         hasher.combine(lastUpdate)
         hasher.combine(realUpdate)
         hasher.combine(parentName)
+        hasher.combine(parentID)
+        hasher.combine(nameWithoutModel)
     }
 }
 
@@ -66,11 +76,33 @@ class GlassyBatteryModel {
     static let machineType = ud.string(forKey: "machineType") ?? "Mac"
     static let key = "com.deckirin.GlassyBattery.widget"
     
+    /// The marketing name for a model identifier ("iPhone19,4" → "iPhone Duo"), or nil for one it
+    /// doesn't know. The table lives in the app only; the widget and the CLI never hold two devices
+    /// of the same name, so they leave this as it is.
+    static var modelName: (String) -> String? = { _ in nil }
+
+    /// Whether a device is identified by a libimobiledevice UDID: an iPhone, iPad or Watch, or an
+    /// iPad's Pencil ("Pencil_<UDID>"). Two of these can share a name — two phones both called
+    /// "Xiding's iPhone" — and their IDs are stable, so they're kept apart by ID. Every other
+    /// source is matched by name, as it always was: the Bluetooth scanners report one device under
+    /// IDs in several formats ("AA:BB:…" from IOKit, "aa-bb-…" from IOBluetooth, a CoreBluetooth
+    /// UUID) and rely on the name to merge them.
+    static func hasUDID(_ device: Device) -> Bool {
+        var id = device.deviceID
+        if id.hasPrefix("Pencil_") { id.removeFirst("Pencil_".count) }
+        return id.range(of: "^([0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}|[0-9A-Fa-f]{40})$", options: .regularExpression) != nil
+    }
+
     static func updateDevice(_ device: Device) {
         if DemoMode.isOn && !device.deviceID.hasPrefix(DemoMode.idPrefix) { return }
         lock.lock()
         defer { lock.unlock() }
-        if let index = Devices.firstIndex(where: { $0.deviceName == device.deviceName }) {
+        let isUDID = hasUDID(device)
+        let sameDevice: (Device) -> Bool = { stored in
+            stored.deviceName == device.deviceName && !(isUDID && hasUDID(stored) && stored.deviceID != device.deviceID)
+        }
+        if let index = (isUDID ? Devices.firstIndex(where: { $0.deviceID == device.deviceID }) : nil)
+            ?? Devices.firstIndex(where: sameDevice) {
             Devices[index] = device
         } else {
             Devices.append(device)
@@ -118,7 +150,7 @@ class GlassyBatteryModel {
     
     static func getAll(reverse: Bool = false, noFilter: Bool = false) -> [Device] {
         lock.lock()
-        let devicesSnapshot = Devices
+        let devicesSnapshot = disambiguated(Devices)
         lock.unlock()
 
         let thisMac = ud.string(forKey: "deviceName")
@@ -140,6 +172,49 @@ class GlassyBatteryModel {
         return newList.filter({ !checkIfBlocked(name: $0.deviceName) })
     }
     
+    /// Gives devices that report the same name names of their own, so everything keyed by name —
+    /// the dropdown, pins, alerts, hidden devices, widgets, AppleScript — tells them apart:
+    /// - different models: the model goes after the name, "Xiding's iPhone (iPhone Duo)";
+    /// - the same model, or one this Mac can't name: a number, "Xiding's iPhone 1", "… 2",
+    ///   in `deviceID` order, so it doesn't swap between refreshes.
+    ///
+    /// It runs over every stored device, expired and hidden ones included, so a phone's name doesn't
+    /// change while the other phone is briefly out of range. A child that knows its parent's ID (a
+    /// Watch, a Pencil) follows its parent's new name.
+    static func disambiguated(_ devices: [Device]) -> [Device] {
+        let groups = Dictionary(grouping: devices.indices, by: { devices[$0].deviceName }).filter { $0.value.count > 1 }
+        guard !groups.isEmpty else { return devices }
+        var result = devices
+        var newNames = [String: String]()   // deviceID → its new name
+        for (name, indices) in groups {
+            let model = { (i: Int) in devices[i].deviceModel.flatMap(modelName) ?? "" }
+            let byModel = Dictionary(grouping: indices, by: model)
+            for (modelLabel, same) in byModel {
+                let ordered = same.sorted { devices[$0].deviceID < devices[$1].deviceID }
+                for (n, i) in ordered.enumerated() {
+                    let title = ordered.count > 1 ? "\(name) \(n + 1)" : name
+                    if byModel.count > 1 && !modelLabel.isEmpty {
+                        result[i].deviceName = "\(title) (\(modelLabel))"
+                        result[i].nameWithoutModel = title
+                    } else {
+                        result[i].deviceName = title
+                    }
+                    newNames[devices[i].deviceID] = result[i].deviceName
+                }
+            }
+        }
+        for i in result.indices {
+            if let parent = result[i].parentID, let name = newNames[parent] { result[i].parentName = name }
+        }
+        return result
+    }
+
+    /// Whether more than one stored device reports this name, so a source that only has the name
+    /// (Bluetooth LE) can't tell which of them it's hearing from.
+    static func isNameShared(_ name: String) -> Bool {
+        snapshot().filter { $0.deviceName == name }.count > 1
+    }
+
     static func getByName(_ name: String) -> Device? {
         for d in getAll(noFilter: true) { if d.deviceName == name { return d } }
         return nil

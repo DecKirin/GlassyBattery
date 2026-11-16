@@ -60,7 +60,7 @@ class IDeviceBattery {
                 if let level = json["level"] as? Int, let model = json["model"] as? String, let vendor = json["vendor"] as? String {
                     let status = (json["status"] as? Int) ?? 0
                     print("ℹ️ Pencil of \(d.deviceName): \(result)")
-                    GlassyBatteryModel.updateDevice(Device(deviceID: "Pencil_"+d.deviceID, deviceType: vendor == "Apple" ? "ApplePencil" : "Pencil", deviceName: vendor == "Apple" ? "Apple Pencil".local : "Pencil".local, deviceModel: model, batteryLevel: level, isCharging: status, parentName: d.deviceName, lastUpdate: Date().timeIntervalSince1970))
+                    GlassyBatteryModel.updateDevice(Device(deviceID: "Pencil_"+d.deviceID, deviceType: vendor == "Apple" ? "ApplePencil" : "Pencil", deviceName: vendor == "Apple" ? "Apple Pencil".local : "Pencil".local, deviceModel: model, batteryLevel: level, isCharging: status, parentName: d.deviceName, parentID: d.deviceID, lastUpdate: Date().timeIntervalSince1970))
                 }
             }
         }
@@ -163,7 +163,7 @@ class IDeviceBattery {
                                    let watchLevelValue = Int(watchLevel.trimmingCharacters(in: .whitespaces)) {
                                     let watchIsCharging = Bool(watchCharging.trimmingCharacters(in: .whitespaces)) ?? false
                                     foundWatch = true
-                                    GlassyBatteryModel.updateDevice(Device(deviceID: watchID, deviceType: "Watch", deviceName: watchName, deviceModel: watchModel, batteryLevel: watchLevelValue, isCharging: watchIsCharging ? 1 : 0, parentName: deviceName, lastUpdate: lastUpdate))
+                                    GlassyBatteryModel.updateDevice(Device(deviceID: watchID, deviceType: "Watch", deviceName: watchName, deviceModel: watchModel, batteryLevel: watchLevelValue, isCharging: watchIsCharging ? 1 : 0, parentName: deviceName, parentID: id, lastUpdate: lastUpdate))
                                 }
                             }
                             noteWatchResult(id, found: foundWatch)

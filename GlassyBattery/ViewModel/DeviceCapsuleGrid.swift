@@ -773,7 +773,7 @@ struct DeviceCapsuleView: View {
     private func textContent(totalWidth: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: dropdownScaled(2)) {
             HStack(spacing: dropdownScaled(3)) {
-                Text((isStale ? "⚠︎ " : "") + device.deviceName)
+                Text((isStale ? "⚠︎ " : "") + (device.nameWithoutModel ?? device.deviceName))
                     .font(.system(size: dropdownScaled(12), weight: .semibold))
                     .dropdownForeground(.primary)
                     .lineLimit(1)
