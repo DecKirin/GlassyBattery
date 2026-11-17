@@ -173,10 +173,11 @@ struct mainBatteryView: View {
         }
     }
 
-    /// 三位数 (100%) 且旁边带充电符号时换一套更紧凑的排版, 不然 "100" 加闪电塞不进 23pt 的主体.
-    /// 没接电源时光是 "100" 塞得下, 系统就不换 (100% 不充电的数字和 95% 一样大)
+    /// 旁边带充电符号时数字重一档、闪电大一圈 (`charging`); 三位数 (100%) 带符号再紧凑一点
+    /// (`compact`), 不然 "100" 加闪电塞不进 23pt 的主体. 没接电源时光是数字, 用 `standard`
     private var glyphLayout: FilledBatteryGlyph.Layout {
-        item.batteryLevel > 99 && item.acPowered ? FilledBatteryGlyph.compact : FilledBatteryGlyph.standard
+        guard item.acPowered else { return FilledBatteryGlyph.standard }
+        return item.batteryLevel > 99 ? FilledBatteryGlyph.compact : FilledBatteryGlyph.charging
     }
 
     /// 填充式电池里那组 "百分比 + 充电符号", 在主体里居中
