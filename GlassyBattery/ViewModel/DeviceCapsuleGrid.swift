@@ -290,8 +290,13 @@ var dropdownShadowBleed: CGFloat { (24 * dropdownScale).rounded() }
 func estimatedDropdownHeight(deviceCount: Int) -> CGFloat {
     let rows = max(1, Int(ceil(Double(max(deviceCount, 1)) / 2.0)))
     let gridHeight = CGFloat(rows) * dropdownCapsuleCellHeight + CGFloat(max(0, rows - 1)) * dropdownGridSpacing
-    return dropdownOuterPadding * 2 + dropdownToolbarHeight + dropdownToolbarSpacing + gridHeight
+    // Tall enough for the power details card, which floats over the devices below the toolbar; a
+    // shorter panel would clip it. The extra window area is transparent.
+    return dropdownOuterPadding * 2 + dropdownToolbarHeight + dropdownToolbarSpacing + max(gridHeight, dropdownPowerCardHeight)
 }
+
+/// Room the power details card needs below the toolbar: its tallest form, with seven adapter options.
+var dropdownPowerCardHeight: CGFloat { 370 * dropdownScale }
 
 // MARK: - Chrome (per-element Liquid Glass)
 //
@@ -582,14 +587,11 @@ struct BatteryHealthRing: View {
     }
 }
 
-/// Ceiling the charge ring scales against: 140W, the largest adapter Apple ships (16" MacBook Pro
-/// MagSafe). A 65W contract therefore fills just under half the ring.
-let maxAdapterWatts: Double = 140
-
 /// Power gauge for the Mac's own battery, sharing `BatteryHealthRing`'s trim-circle construction.
 ///
 /// Two distinct readings share one dial, because only one of them is meaningful at a time:
-/// plugged in it shows the *adapter's negotiated wattage* against the 140W ceiling, and on battery
+/// plugged in it shows the *adapter's negotiated wattage* against the most this Mac model takes from
+/// a charger (`MacChargingLimit`), and on battery
 /// it shows what the machine is *drawing*. Discharge has no comparable ceiling to scale against, so
 /// it draws no arc at all — an empty track next to a live number would read as "0%".
 struct PowerWattageRing: View {
@@ -598,6 +600,9 @@ struct PowerWattageRing: View {
     /// Ring fill fraction, or nil to omit the ring entirely.
     var progress: Double?
     var help: String
+    /// Told when the pointer enters or leaves the dial; the dropdown shows `PowerDetailsCard` while
+    /// it rests there. Without it the dial has a plain tooltip instead.
+    var onHover: ((Bool) -> Void)? = nil
     var action: () -> Void
     @Environment(\.dropdownPinnedScheme) private var pinned
 
@@ -642,7 +647,146 @@ struct PowerWattageRing: View {
             .dialUnitBadge("W")
         }
         .buttonStyle(.plain)
-        .help(help)
+        .help(onHover == nil ? help : "")
+        .onHover { onHover?($0) }
+    }
+}
+
+/// What the power dial says when the pointer rests on it: where the power is going right now, and
+/// every voltage/current combination the adapter offers, the one in use marked. Re-read every
+/// second while it's open.
+struct PowerDetailsCard: View {
+    @Environment(\.dropdownPinnedScheme) private var pinned
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            if let details = PowerDetails.read() {
+                content(details)
+            }
+        }
+        .padding(.horizontal, dropdownScaled(16))
+        .padding(.vertical, dropdownScaled(14))
+        .frame(width: dropdownScaled(268))
+        // It floats over the device capsules, whose coloured fills showed through plain glass and
+        // muddied the figures; a thick blur under the glass keeps them readable.
+        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: dropdownScaled(22), style: .continuous))
+        .chromeGlassBackground(in: RoundedRectangle(cornerRadius: dropdownScaled(22), style: .continuous))
+    }
+
+    @ViewBuilder private func content(_ d: PowerDetails) -> some View {
+        VStack(alignment: .leading, spacing: dropdownScaled(10)) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Power".local).font(.system(size: dropdownScaled(13), weight: .semibold))
+                Spacer(minLength: dropdownScaled(8))
+                Text(status(d)).font(.system(size: dropdownScaled(11))).dropdownForeground(.secondary)
+            }
+            .dropdownForeground(.primary)
+
+            VStack(spacing: dropdownScaled(6)) {
+                if let input = d.inputPower {
+                    flowRow("powerplug.portrait.fill", "From Adapter".local, input,
+                            detail: d.inputVoltage.flatMap { v in d.inputCurrent.map { String(format: "%.1f V × %.2f A", v, $0) } })
+                }
+                if let battery = d.batteryPower, abs(battery) >= 0.05 {
+                    flowRow(battery > 0 ? "battery.100percent.bolt" : "battery.75percent",
+                            (battery > 0 ? "Into Battery" : "From Battery").local, abs(battery))
+                }
+                if let system = d.systemPower {
+                    flowRow("laptopcomputer", "This Mac".local, system)
+                }
+                if let loss = d.conversionLoss, d.inputPower != nil {
+                    flowRow("flame", "Conversion Loss".local, loss)
+                }
+            }
+
+            if d.isPluggedIn {
+                Divider().opacity(0.5)
+                HStack(alignment: .firstTextBaseline) {
+                    Text(d.adapterName ?? "Power Adapter".local)
+                        .font(.system(size: dropdownScaled(11), weight: .semibold))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                    Spacer(minLength: dropdownScaled(8))
+                    if let watts = d.adapterWatts {
+                        Text("\(watts) W").font(.system(size: dropdownScaled(11), weight: .semibold)).monospacedDigitIfAvailable()
+                    }
+                }
+                .dropdownForeground(.primary)
+                if !d.options.isEmpty {
+                    VStack(spacing: dropdownScaled(3)) {
+                        ForEach(d.options) { optionRow($0) }
+                    }
+                }
+            }
+
+            Text(String(format: "This Mac charges at up to %d W.".local, MacChargingLimit.current))
+                .font(.system(size: dropdownScaled(10)))
+                .dropdownForeground(.secondary)
+        }
+    }
+
+    private func status(_ d: PowerDetails) -> String {
+        guard d.isPluggedIn else { return "On Battery".local }
+        var text: String
+        if d.isCharging {
+            text = "Charging".local
+            if let minutes = d.minutesToFull {
+                text += " · " + String(format: "%d min to full".local, minutes)
+            }
+            if d.slowChargingReason != 0 { text += " · " + "Slowed".local }
+        } else {
+            text = (d.isFullyCharged ? "Fully Charged" : "Not Charging").local
+        }
+        return text
+    }
+
+    private func flowRow(_ symbol: String, _ title: String, _ watts: Double, detail: String? = nil) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: dropdownScaled(8)) {
+            Image(systemName: symbol)
+                .font(.system(size: dropdownScaled(11)))
+                .frame(width: dropdownScaled(18))
+                .dropdownForeground(.secondary)
+            VStack(alignment: .leading, spacing: dropdownScaled(1)) {
+                Text(title).font(.system(size: dropdownScaled(12)))
+                if let detail {
+                    Text(detail).font(.system(size: dropdownScaled(10))).monospacedDigitIfAvailable()
+                        .dropdownForeground(.secondary)
+                }
+            }
+            Spacer(minLength: dropdownScaled(8))
+            Text(String(format: "%.1f W", watts))
+                .font(.system(size: dropdownScaled(12), weight: .semibold))
+                .monospacedDigitIfAvailable()
+        }
+        .dropdownForeground(.primary)
+    }
+
+    private func optionRow(_ o: PowerDetails.Option) -> some View {
+        let weight: Font.Weight = o.isActive ? .semibold : .regular
+        let voltage = o.minVoltage.map { String(format: "%@–%@ V", Self.number($0), Self.number(o.voltage)) }
+            ?? String(format: "%@ V", Self.number(o.voltage))
+        let current = o.maxCurrent.map { String(format: "%.2f A", $0) } ?? ""
+        return HStack(spacing: dropdownScaled(6)) {
+            Image(systemName: "checkmark")
+                .font(.system(size: dropdownScaled(9), weight: .bold))
+                .opacity(o.isActive ? 1 : 0)
+                .frame(width: dropdownScaled(12))
+            Text(voltage).frame(width: dropdownScaled(70), alignment: .leading)
+            Text(current).frame(width: dropdownScaled(48), alignment: .trailing)
+            Spacer(minLength: dropdownScaled(4))
+            Text(String(format: o.kind == .adjustable ? "≤ %@ W" : "%@ W", Self.number(o.maxPower)))
+            if o.isExtendedRange {
+                Text("EPR").font(.system(size: dropdownScaled(8), weight: .bold)).dropdownForeground(.secondary)
+            }
+        }
+        .font(.system(size: dropdownScaled(11), weight: weight))
+        .monospacedDigitIfAvailable()
+        .dropdownForeground(o.isActive ? .primary : .secondary)
+    }
+
+    /// "5", "14.8", "139.7": a whole number without its ".0".
+    private static func number(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        return rounded == rounded.rounded() ? String(Int(rounded)) : String(format: "%.1f", rounded)
     }
 }
 

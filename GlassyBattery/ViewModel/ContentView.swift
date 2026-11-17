@@ -301,6 +301,10 @@ struct popover: View {
     @State private var pinnedList = (ud.object(forKey: "pinnedList") ?? []) as! [String]
     @State private var allNearcast = getFiles(withExtension: "json", in: ncFolder)
     @State private var hoveredDeviceName: String? = nil
+    /// The power details card shows while the pointer is on the power dial or on the card itself.
+    @State private var dialHovered = false
+    @State private var cardHovered = false
+    @State private var showPowerCard = false
 
     private var mergedDevices: [Device] {
         guard nearCast else { return allDevices }
@@ -336,6 +340,14 @@ struct popover: View {
                 }
             }
         }
+        .overlay(alignment: .top) {
+            if showPowerCard {
+                PowerDetailsCard()
+                    .onHover { cardHovered = $0; updatePowerCard() }
+                    .padding(.top, dropdownToolbarHeight + dropdownToolbarSpacing)
+                    .transition(.opacity)
+            }
+        }
         .padding(dropdownOuterPadding)
         .frame(width: dropdownPanelWidth)
         .fixedSize(horizontal: false, vertical: true)
@@ -358,6 +370,20 @@ struct popover: View {
             if nearCast { allNearcast = getFiles(withExtension: "json", in: ncFolder) }
             alertList = ud.get(objectType: [btAlert].self, forKey: "alertList") ?? []
             pinnedList = (ud.object(forKey: "pinnedList") ?? []) as! [String]
+        }
+    }
+
+    /// Shows the card at once; hides it a moment after the pointer leaves both the dial and the
+    /// card, so crossing the gap between them doesn't close it.
+    private func updatePowerCard() {
+        if dialHovered || cardHovered {
+            withAnimation(.easeOut(duration: 0.15)) { showPowerCard = true }
+        } else {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                if !dialHovered && !cardHovered {
+                    withAnimation(.easeOut(duration: 0.15)) { showPowerCard = false }
+                }
+            }
         }
     }
 
@@ -399,15 +425,17 @@ struct popover: View {
         if ib.hasBattery {
             if ib.acPowered, let adapter = ib.adapterWatts {
                 PowerWattageRing(watts: Double(adapter),
-                                 progress: Double(adapter) / maxAdapterWatts,
-                                 help: "\("Charging Power".local): \(adapter)W") {
+                                 progress: min(1, Double(adapter) / Double(MacChargingLimit.current)),
+                                 help: "\("Charging Power".local): \(adapter)W",
+                                 onHover: { dialHovered = $0; updatePowerCard() }) {
                     deviceDropdownWindow.dismiss()
                     openSettingPanel()
                 }
             } else if !ib.acPowered, let draw = ib.powerWatts, draw > 0 {
                 PowerWattageRing(watts: draw,
                                  progress: nil,
-                                 help: String(format: "%@: %.1fW", "Power Usage".local, draw)) {
+                                 help: String(format: "%@: %.1fW", "Power Usage".local, draw),
+                                 onHover: { dialHovered = $0; updatePowerCard() }) {
                     deviceDropdownWindow.dismiss()
                     openSettingPanel()
                 }

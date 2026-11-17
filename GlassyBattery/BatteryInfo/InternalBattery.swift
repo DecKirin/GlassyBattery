@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import IOKit
 import IOKit.ps
 
 struct iBattery {
@@ -381,3 +382,189 @@ class InternalFinder {
     }
 }
 
+
+// MARK: - Power details
+
+/// Where this Mac's power is going right now, and what its power adapter offers, from the battery's
+/// IORegistry entry (`AppleSmartBattery`). The dropdown shows it when the pointer rests on the power
+/// dial. Everything here is read live and is optional: Macs and adapters report different subsets.
+struct PowerDetails: Equatable {
+    /// One voltage/current combination the adapter offers (a USB Power Delivery "PDO").
+    struct Option: Equatable, Identifiable {
+        enum Kind: Equatable {
+            /// A fixed voltage, up to `maxCurrent`.
+            case fixed
+            /// USB-PD PPS: any voltage from `minVoltage` to `voltage`, up to `maxCurrent`.
+            case programmable
+            /// USB-PD EPR AVS: any voltage from `minVoltage` to `voltage`, up to `maxPower`.
+            case adjustable
+        }
+        let id: Int
+        let kind: Kind
+        /// Volts. The top of the range for `.programmable` and `.adjustable`.
+        let voltage: Double
+        let minVoltage: Double?
+        /// Amps; nil for `.adjustable`, which is rated in watts.
+        let maxCurrent: Double?
+        /// Watts.
+        let maxPower: Double
+        /// Above 20 V: USB-PD's Extended Power Range, which only 140W-class adapters and Macs use.
+        var isExtendedRange: Bool { voltage > 20.5 }
+        /// The option the Mac is using now.
+        var isActive: Bool
+    }
+
+    var adapterName: String?
+    var adapterWatts: Int?
+    /// Watts flowing in from the adapter, and the voltage and current they arrive at.
+    var inputPower: Double?
+    var inputVoltage: Double?
+    var inputCurrent: Double?
+    /// Watts into the battery (positive) or out of it (negative).
+    var batteryPower: Double?
+    /// Watts the Mac itself is using.
+    var systemPower: Double?
+    /// Watts lost converting the adapter's voltage.
+    var conversionLoss: Double?
+    var isCharging = false
+    var isFullyCharged = false
+    var isPluggedIn = false
+    var minutesToFull: Int?
+    /// The battery controller's own flags: non-zero when charging is held back or slowed.
+    var notChargingReason = 0
+    var slowChargingReason = 0
+    var options: [Option] = []
+
+    static func read() -> PowerDetails? {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
+        guard service != 0 else { return nil }
+        defer { IOObjectRelease(service) }
+        var unmanaged: Unmanaged<CFMutableDictionary>?
+        guard IORegistryEntryCreateCFProperties(service, &unmanaged, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+              let props = unmanaged?.takeRetainedValue() as? [String: Any] else { return nil }
+        return PowerDetails(properties: props)
+    }
+
+    init(properties p: [String: Any]) {
+        func number(_ any: Any?) -> Double? { (any as? NSNumber)?.doubleValue }
+        let adapter = p["AdapterDetails"] as? [String: Any] ?? [:]
+        let telemetry = p["PowerTelemetryData"] as? [String: Any] ?? [:]
+        let charger = p["ChargerData"] as? [String: Any] ?? [:]
+
+        isPluggedIn = (p["ExternalConnected"] as? Bool) ?? false
+        isCharging = (p["IsCharging"] as? Bool) ?? false
+        isFullyCharged = (p["FullyCharged"] as? Bool) ?? false
+        if let minutes = number(p["AvgTimeToFull"]), minutes > 0, minutes < 65535 { minutesToFull = Int(minutes) }
+        notChargingReason = Int(number(charger["NotChargingReason"]) ?? 0)
+        slowChargingReason = Int(number(charger["SlowChargingReason"]) ?? 0)
+
+        if isPluggedIn {
+            adapterName = (adapter["Name"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            if let watts = number(adapter["Watts"]), watts > 0 { adapterWatts = Int(watts) }
+            if let mW = number(telemetry["SystemPowerIn"]), mW > 0 { inputPower = mW / 1000 }
+            if let mV = number(telemetry["SystemVoltageIn"]), mV > 0 { inputVoltage = mV / 1000 }
+            if let mA = number(telemetry["SystemCurrentIn"]), mA > 0 { inputCurrent = mA / 1000 }
+            if let mW = number(telemetry["AdapterEfficiencyLoss"]), mW >= 0 { conversionLoss = mW / 1000 }
+        }
+        if let mW = number(telemetry["SystemLoad"]), mW > 0 { systemPower = mW / 1000 }
+        // Volts × amps at the battery's terminals; Amperage is negative while discharging.
+        if let mV = number(p["Voltage"]), let mA = number(p["Amperage"]) {
+            batteryPower = mV * mA / 1_000_000
+        }
+        if isPluggedIn {
+            options = Self.options(properties: p, activeIndex: (number(adapter["UsbHvcHvcIndex"])).map(Int.init),
+                                   menu: adapter["UsbHvcMenu"] as? [[String: Any]])
+        }
+    }
+
+    /// The adapter's options. Preferably the port controller's raw USB-PD source capabilities, which
+    /// include the Extended Power Range ones (28 V); else Apple's own menu, which lists only up to
+    /// 20 V. `activeIndex` (`UsbHvcHvcIndex`) is the in-use option's position in either list.
+    private static func options(properties p: [String: Any], activeIndex: Int?, menu: [[String: Any]]?) -> [Option] {
+        let ports = p["PortControllerInfo"] as? [[String: Any]] ?? []
+        let port = ports
+            .filter { (($0["PortControllerNPDOs"] as? NSNumber)?.intValue ?? 0) > 0 }
+            .max { (($0["PortControllerMaxPower"] as? NSNumber)?.intValue ?? 0) < (($1["PortControllerMaxPower"] as? NSNumber)?.intValue ?? 0) }
+        if let raw = port?["PortControllerPortPDO"] as? [NSNumber] {
+            let decoded = raw.enumerated().compactMap { index, value in
+                decodePDO(UInt32(truncatingIfNeeded: value.int64Value), index: index, active: index == activeIndex)
+            }
+            if !decoded.isEmpty { return decoded }
+        }
+        return (menu ?? []).compactMap { entry in
+            guard let index = (entry["Index"] as? NSNumber)?.intValue,
+                  let mV = (entry["MaxVoltage"] as? NSNumber)?.doubleValue, mV > 0,
+                  let mA = (entry["MaxCurrent"] as? NSNumber)?.doubleValue else { return nil }
+            return Option(id: index, kind: .fixed, voltage: mV / 1000, minVoltage: nil, maxCurrent: mA / 1000,
+                          maxPower: mV * mA / 1_000_000, isActive: index == activeIndex)
+        }
+    }
+
+    /// One USB Power Delivery source PDO (USB-PD 3.1, table 6-7 onwards). Zero means an empty slot.
+    static func decodePDO(_ pdo: UInt32, index: Int, active: Bool) -> Option? {
+        guard pdo != 0 else { return nil }
+        switch pdo >> 30 {
+        case 0: // fixed supply: 50 mV and 10 mA units
+            let volts = Double((pdo >> 10) & 0x3FF) * 0.05
+            let amps = Double(pdo & 0x3FF) * 0.01
+            guard volts > 0 else { return nil }
+            return Option(id: index, kind: .fixed, voltage: volts, minVoltage: nil, maxCurrent: amps,
+                          maxPower: volts * amps, isActive: active)
+        case 3: // augmented
+            switch (pdo >> 28) & 0x3 {
+            case 0: // SPR PPS: 100 mV and 50 mA units
+                let maxV = Double((pdo >> 17) & 0xFF) * 0.1
+                let minV = Double((pdo >> 8) & 0xFF) * 0.1
+                let amps = Double(pdo & 0x7F) * 0.05
+                return Option(id: index, kind: .programmable, voltage: maxV, minVoltage: minV, maxCurrent: amps,
+                              maxPower: maxV * amps, isActive: active)
+            case 1: // EPR AVS: 100 mV units, power in whole watts
+                let maxV = Double((pdo >> 17) & 0x1FF) * 0.1
+                let minV = Double((pdo >> 8) & 0xFF) * 0.1
+                return Option(id: index, kind: .adjustable, voltage: maxV, minVoltage: minV, maxCurrent: nil,
+                              maxPower: Double(pdo & 0xFF), isActive: active)
+            default:
+                return nil
+            }
+        default: // battery and variable supplies: not something Apple's adapters offer
+            return nil
+        }
+    }
+}
+
+/// The most this Mac takes from a charger, in watts: the highest-wattage adapter Apple lists for
+/// fast charging each model. The power dial fills against it, so a 70 W adapter on a 70 W MacBook
+/// Air is a full ring, and the same adapter on a 16-inch MacBook Pro is half of one. Models not
+/// listed (desktops, and ones newer than this table) use 140 W, the largest Apple adapter.
+enum MacChargingLimit {
+    static let fallback = 140
+
+    static let watts: [String: Int] = [
+        // MacBook Air
+        "MacBookAir8,1": 30, "MacBookAir8,2": 30, "MacBookAir9,1": 30, "MacBookAir10,1": 30,
+        "Mac14,2": 70, "Mac14,15": 70,                       // M2, 13" and 15"
+        "Mac15,12": 70, "Mac15,13": 70,                      // M3
+        "Mac16,12": 70, "Mac16,13": 70,                      // M4
+        // MacBook Pro, Intel
+        "MacBookPro15,1": 87, "MacBookPro15,3": 87,          // 15", 2018–2019
+        "MacBookPro15,2": 61, "MacBookPro15,4": 61,          // 13", 2018–2019
+        "MacBookPro16,1": 96, "MacBookPro16,4": 96,          // 16", 2019
+        "MacBookPro16,2": 61, "MacBookPro16,3": 61,          // 13", 2020
+        // MacBook Pro, Apple silicon
+        "MacBookPro17,1": 61,                                // 13" M1
+        "MacBookPro18,3": 96, "MacBookPro18,4": 96,          // 14" M1 Pro / Max
+        "MacBookPro18,1": 140, "MacBookPro18,2": 140,        // 16" M1 Pro / Max
+        "Mac14,7": 67,                                       // 13" M2
+        "Mac14,9": 96, "Mac14,5": 96,                        // 14" M2 Pro / Max
+        "Mac14,10": 140, "Mac14,6": 140,                     // 16" M2 Pro / Max
+        "Mac15,3": 70,                                       // 14" M3
+        "Mac15,6": 96, "Mac15,8": 96, "Mac15,10": 96,        // 14" M3 Pro / Max
+        "Mac15,7": 140, "Mac15,9": 140, "Mac15,11": 140,     // 16" M3 Pro / Max
+        "Mac16,1": 70,                                       // 14" M4
+        "Mac16,6": 96, "Mac16,8": 96,                        // 14" M4 Pro / Max
+        "Mac16,5": 140, "Mac16,7": 140,                      // 16" M4 Pro / Max
+    ]
+
+    /// This Mac's limit.
+    static let current: Int = watts[getMacModelIdentifier()] ?? fallback
+}
