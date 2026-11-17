@@ -690,7 +690,7 @@ struct DeviceCapsuleView: View {
     @ViewBuilder
     private var internalBatterySubtitle: some View {
         if device.isCharged {
-            Text("\(Image(systemName: "bolt.fill")) \("Fully Charged".local)")
+            Text("\(Image(systemName: "powerplug.portrait.fill")) \("Fully Charged".local)")
         } else if device.isCharging != 0 {
             Text("\(Image(systemName: "bolt.fill")) \(InternalBattery.status.timeLeft)")
         } else {
@@ -742,6 +742,27 @@ struct DeviceCapsuleView: View {
         tieredGlass(Capsule(style: .continuous), color: tierColor)
     }
 
+    /// What the round badge beside the percentage shows, if anything. Only what a device reports:
+    /// one read over plain Bluetooth reports a level alone, and gets no badge.
+    /// - a bolt while it charges;
+    /// - a plug while it runs on power without charging (full, or held at a charge limit): this Mac
+    ///   on its adapter, an iPhone, iPad or Watch on a charger (`acPowered`), or a device reporting
+    ///   5 ("on power", as `BatteryView` draws it).
+    private var powerSymbol: String? {
+        guard device.hasBattery else { return nil }
+        if device.isCharging == 5 || (device.isCharging == 0 && device.acPowered) { return "powerplug.portrait.fill" }
+        return device.isCharging != 0 ? "bolt.fill" : nil
+    }
+
+    /// The percentage pill, with the power badge beside it when there's one.
+    private var badge: some View {
+        HStack(spacing: dropdownScaled(4)) {
+            levelBadge
+            if let symbol = powerSymbol { powerBadge(symbol) }
+        }
+        .offset(x: dropdownScaled(12))
+    }
+
     /// Icon + percentage in a glass pill riding on the capsule's top edge.
     ///
     /// Uses `.regular` glass, not `.clear`. `.clear` looked more transparent but does not vend
@@ -749,7 +770,7 @@ struct DeviceCapsuleView: View {
     /// no matter what was behind it. `.regular` is still translucent and adapts like the capsule
     /// track and toolbar buttons. As always the glass is applied to the content, not stacked behind
     /// it, so the icon and label inherit that vibrancy.
-    private var badge: some View {
+    private var levelBadge: some View {
         HStack(spacing: dropdownScaled(4)) {
             deviceIconImage(device)
                 .resizable()
@@ -766,7 +787,16 @@ struct DeviceCapsuleView: View {
         .padding(.horizontal, dropdownScaled(10))
         .frame(height: dropdownBadgeHeight)
         .chromeGlassBackground(in: Capsule(style: .continuous))
-        .offset(x: dropdownScaled(12))
+    }
+
+    /// A round glass badge, the pill's height, with the bolt or plug in it.
+    private func powerBadge(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: dropdownScaled(11), weight: .semibold))
+            .dropdownForeground(.primary)
+            .frame(width: dropdownBadgeHeight, height: dropdownBadgeHeight)
+            .chromeGlassBackground(in: Capsule(style: .continuous))
+            .help(symbol == "bolt.fill" ? "Charging".local : "On Power Adapter".local)
     }
 
     @ViewBuilder

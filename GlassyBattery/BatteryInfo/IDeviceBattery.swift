@@ -133,6 +133,12 @@ class IDeviceBattery {
         }
     }
 
+    /// A "Key: true" line of ideviceinfo's output; false when it's missing or false.
+    private static func flag(_ key: String, in lines: [String]) -> Bool {
+        lines.first { $0.trimmingCharacters(in: .whitespaces).hasPrefix(key + ":") }?.components(separatedBy: ": ").last?
+            .trimmingCharacters(in: .whitespaces) == "true"
+    }
+
     func writeBatteryInfo(_ id: String, _ connectType: String) {
         let lastUpdate = Date().timeIntervalSince1970
         if connectType == "" { _ = process(path: "\(Bundle.main.resourcePath!)/libimobiledevice/bin/wificonnection", arguments: ["-u", id, "true"], timeout: idTimeout) }
@@ -150,7 +156,10 @@ class IDeviceBattery {
                        let charging = b.filter({ $0.contains("BatteryIsCharging") }).first?.components(separatedBy: ": ").last,
                        let levelValue = Int(level.trimmingCharacters(in: .whitespaces)) {
                         let isCharging = Bool(charging.trimmingCharacters(in: .whitespaces)) ?? false
-                        GlassyBatteryModel.updateDevice(Device(deviceID: id, deviceType: type, deviceName: deviceName, deviceModel: model, batteryLevel: levelValue, isCharging: isCharging ? 1 : 0, lastUpdate: lastUpdate))
+                        // On a charger without charging: full, or held back by Optimized Charging or
+                        // a charge limit. The dropdown shows a plug for it, as for this Mac.
+                        let onPower = Self.flag("ExternalConnected", in: b)
+                        GlassyBatteryModel.updateDevice(Device(deviceID: id, deviceType: type, deviceName: deviceName, deviceModel: model, batteryLevel: levelValue, isCharging: isCharging ? 1 : 0, acPowered: onPower, lastUpdate: lastUpdate))
                         if shouldQueryWatch(id) {
                             var foundWatch = false
                             if let watchInfo = process(path: "\(Bundle.main.resourcePath!)/libimobiledevice/bin/comptest", arguments: [id], timeout: watchTimeout) {
@@ -163,7 +172,7 @@ class IDeviceBattery {
                                    let watchLevelValue = Int(watchLevel.trimmingCharacters(in: .whitespaces)) {
                                     let watchIsCharging = Bool(watchCharging.trimmingCharacters(in: .whitespaces)) ?? false
                                     foundWatch = true
-                                    GlassyBatteryModel.updateDevice(Device(deviceID: watchID, deviceType: "Watch", deviceName: watchName, deviceModel: watchModel, batteryLevel: watchLevelValue, isCharging: watchIsCharging ? 1 : 0, parentName: deviceName, parentID: id, lastUpdate: lastUpdate))
+                                    GlassyBatteryModel.updateDevice(Device(deviceID: watchID, deviceType: "Watch", deviceName: watchName, deviceModel: watchModel, batteryLevel: watchLevelValue, isCharging: watchIsCharging ? 1 : 0, acPowered: Self.flag("ExternalConnected", in: w), parentName: deviceName, parentID: id, lastUpdate: lastUpdate))
                                 }
                             }
                             noteWatchResult(id, found: foundWatch)
