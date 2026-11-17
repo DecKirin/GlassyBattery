@@ -7,6 +7,7 @@ import Foundation
 
 do {
     try runCoreTests()
+    runPowerDetailsTests()
     try runHTTPTests()
     try runRouterTests()
     try runIconTests()

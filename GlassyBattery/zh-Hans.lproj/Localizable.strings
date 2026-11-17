@@ -212,3 +212,15 @@
 "\"%@\" wants to add devices to GlassyBattery." = "“%@” 想要向 GlassyBattery 添加设备";
 "Charging" = "正在充电";
 "On Power Adapter" = "使用电源适配器";
+"Power" = "电源";
+"From Adapter" = "来自电源适配器";
+"Into Battery" = "充入电池";
+"From Battery" = "来自电池";
+"This Mac" = "这台 Mac";
+"Conversion Loss" = "转换损耗";
+"Power Adapter" = "电源适配器";
+"This Mac charges at up to %d W." = "这台 Mac 最高以 %d W 充电。";
+"On Battery" = "使用电池";
+"%d min to full" = "%d 分钟后充满";
+"Slowed" = "已减速";
+"Not Charging" = "未在充电";

@@ -250,3 +250,47 @@ func runCoreTests() throws {
         check(GlassyBatteryModel.snapshot().filter { $0.deviceName == "Spare iPhone" }.count == 1, "a BLE reading merges into the phone")
     }
 }
+
+// MARK: - Power details
+
+func runPowerDetailsTests() {
+    // A 140W USB-C Power Adapter on a 16-inch MacBook Pro, as its AppleSmartBattery entry reads.
+    let pdos: [NSNumber] = [142709032, 184617, 307498, 410099, 0, 0, 0, 573939, -768567669, 0, 0, 0, 0]
+    let properties: [String: Any] = [
+        "ExternalConnected": true, "IsCharging": true, "FullyCharged": false, "AvgTimeToFull": 32,
+        "Voltage": 12652, "Amperage": 1663,
+        "AdapterDetails": ["Name": "140W USB-C Power Adapter", "Watts": 140, "UsbHvcHvcIndex": 7,
+                           "UsbHvcMenu": [["Index": 0, "MaxCurrent": 2960, "MaxVoltage": 5000]]] as [String: Any],
+        "PowerTelemetryData": ["SystemPowerIn": 40053, "SystemVoltageIn": 27911, "SystemCurrentIn": 1435,
+                               "SystemLoad": 19310, "AdapterEfficiencyLoss": 822],
+        "ChargerData": ["NotChargingReason": 0, "SlowChargingReason": 0],
+        "PortControllerInfo": [["PortControllerNPDOs": 0, "PortControllerMaxPower": 0, "PortControllerPortPDO": [NSNumber](repeating: 0, count: 13)],
+                               ["PortControllerNPDOs": 4, "PortControllerMaxPower": 139720, "PortControllerPortPDO": pdos]],
+    ]
+    let d = PowerDetails(properties: properties)
+    let options = d.options.map { o -> String in
+        let v = o.minVoltage.map { "\($0)-\(o.voltage)" } ?? "\(o.voltage)"
+        return "\(v)V \(o.maxCurrent.map { String(format: "%.2f", $0) } ?? "-")A \(Int(o.maxPower.rounded()))W\(o.isActive ? " *" : "")"
+    }
+    check(options == ["5.0V 2.96A 15W", "9.0V 2.97A 27W", "15.0V 2.98A 45W", "20.0V 4.99A 100W", "28.0V 4.99A 140W *", "15.0-28.0V -A 139W"],
+          "the adapter's six options, 28 V in use (got \(options))")
+    check(d.options.filter(\.isExtendedRange).count == 2 && d.options.last?.kind == .adjustable, "28 V options are extended range; the last is AVS")
+    check(d.inputPower == 40.053 && d.systemPower == 19.31 && d.conversionLoss == 0.822, "power in, the Mac's use, the loss")
+    check(abs((d.batteryPower ?? 0) - 21.04) < 0.01 && d.minutesToFull == 32, "into the battery, minutes to full")
+
+    var onBattery = properties
+    onBattery["ExternalConnected"] = false
+    onBattery["IsCharging"] = false
+    onBattery["Amperage"] = -900
+    let b = PowerDetails(properties: onBattery)
+    check(b.options.isEmpty && b.inputPower == nil && (b.batteryPower ?? 0) < 0, "on battery: no adapter, power out of the battery")
+
+    // Without the port controller's list, Apple's own menu, which stops at 20 V.
+    var menuOnly = properties
+    menuOnly["PortControllerInfo"] = nil
+    menuOnly["AdapterDetails"] = ["Watts": 96, "UsbHvcHvcIndex": 3,
+                                  "UsbHvcMenu": [["Index": 0, "MaxCurrent": 3000, "MaxVoltage": 5000],
+                                                 ["Index": 3, "MaxCurrent": 4800, "MaxVoltage": 20000]]] as [String: Any]
+    let m = PowerDetails(properties: menuOnly)
+    check(m.options.map(\.voltage) == [5, 20] && m.options.last?.isActive == true, "Apple's menu as a fallback")
+}

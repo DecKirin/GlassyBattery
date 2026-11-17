@@ -566,7 +566,7 @@ private struct DropdownUnitStylePreview: View {
                 HStack(spacing: dropdownToolbarSpacing) {
                     CircleGlassButton(systemImage: "gearshape.fill") {}
                     PowerWattageRing(watts: 96,
-                                     progress: 96 / maxAdapterWatts,
+                                     progress: min(1, 96 / Double(MacChargingLimit.current)),
                                      help: "") {}
                     BatteryHealthRing(health: 92) {}
                     CircleGlassButton(systemImage: "power") {}
