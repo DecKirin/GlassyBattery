@@ -1178,13 +1178,37 @@ enum FilledBatteryGlyph {
     static let charging = Layout(fontSize: 10.2, weight: .medium, tracking: -0.3,
                                  symbolCanvasHeight: 8.8, symbolSpacing: -0.75, symbolOffsetY: 0, offsetX: 0.375)
 
-    /// 两位数不带充电符号 (以及不带充电符号的三位数).
-    /// 在 macOS 27.0 (26A428) 的真菜单栏上和系统那颗并排逐像素比对 (95%):
-    /// 字号 9.4–10.6 × 字重 light/regular/medium 一起扫, 只有 regular 10.0 对得上 (残差 0.86,
-    /// 次好的 13.3), 包围盒、墨量 (121 vs 123px²) 和重心都一致. 符号量到墨迹 4.5×7.0pt,
-    /// 资源里墨迹占画布的 12/14, 所以画布 8.2
-    static let standard = Layout(fontSize: 10.0, weight: .regular, tracking: 0,
-                                 symbolCanvasHeight: 8.2, symbolSpacing: 0, symbolOffsetY: 0, offsetX: 0)
+    /// 一位数带充电符号. 在 macOS 27.2 (26B123) 上从 1% 充到 8% 时和系统那颗并排量: 字和闪电都和两位数那档
+    /// 一样 (medium 10.2, 闪电画布 8.8 —— 逐像素对过, alpha 差不到 0.03), 只是数字和闪电之间宽一点:
+    /// 间距 -0.75 时 "1" 离闪电近 0.65px、"7" 直接和闪电粘在一起, -0.5 在 1 / 3 / 8 上数字和闪电的重心
+    /// 都在 0.15px 以内 ("2" / "5" 整组偏左 0.6px, 是像素吸附, 两个一起偏). 也试过等宽数字 —— "8" 上粘连, 不是.
+    static let chargingSingleDigit = Layout(fontSize: 10.2, weight: .medium, tracking: -0.3,
+                                            symbolCanvasHeight: 8.8, symbolSpacing: -0.5, symbolOffsetY: 0, offsetX: 0.375)
+
+    /// 一位数, 没接电源. 和两位数同一套字; 8% 上用 -0.25 偏右 0.36px, 往左挪一档吸附位置
+    static let dischargingSingleDigit = Layout(fontSize: 10.2, weight: .medium, tracking: -0.2,
+                                               symbolCanvasHeight: 8.8, symbolSpacing: -0.75, symbolOffsetY: 0, offsetX: -0.375)
+
+    /// 一位 / 两位数, 没接电源 (不带充电符号). 在 macOS 27.2 (26B123) 的 Retina 真菜单栏上拔掉电源,
+    /// 和系统那颗并排量 (26% → 15%): 截图直接带菜单栏的 alpha 通道, 每颗挖洞按本列的底 (电量段 / 50% 的底)
+    /// 归一. 系统这一档和充电那档是同一个字 —— medium 10.2 —— 只是旁边没符号, 整组居中.
+    /// 27.0 那套 regular 10.0 在 27.2 上墨量少 20%; 换 medium 10.2 后墨量差 0.5–4%.
+    /// 字距取 -0.2 不取充电那档的 -0.3: 字距也按像素吸附, -0.3 在 "19" 上把 1 和 9 挤近了 0.6px,
+    /// -0.2 在 26 / 21 / 20 / 19 / 17 上数字间距都在 0.15px 以内.
+    /// 整组位置按像素吸附, 而且跟着数字变 (同样的参数, "16" 和 "17" 的 1 差半个像素, 系统那颗不动),
+    /// 所以没有一个位移能处处对齐: -0.375 在 17 / 20 上偏左 0.2px、在 16 上偏左 0.7px;
+    /// -0.25 在 17 / 20 上偏右 0.3px、在 15 上偏左 0.2px —— 取最坏情况小的 -0.25.
+    /// 残差 ("20") 49 → 22.5 左右, ("15") 18; semibold 9.8 墨量也对, 但整组高 0.5px, 残差 40
+    static let discharging = Layout(fontSize: 10.2, weight: .medium, tracking: -0.2,
+                                    symbolCanvasHeight: 8.8, symbolSpacing: -0.75, symbolOffsetY: 0, offsetX: -0.25)
+
+    /// 三位数 (100%) 不带充电符号. 在 macOS 27.2 (26B123) 上 100% 拔掉电源和系统那颗并排量:
+    /// 27.0 那套 regular 10.0 字号和间距都对, 但墨量少 17%、整组偏右 0.5px (残差 74).
+    /// 离线渲染按 "间距不变、墨量 +17%" 挑, medium 9.9 / 字距 -0.1 正好 (间距差 0.05px 以内),
+    /// 实测墨量差 1–2%, 整组偏右 0.15px、偏低 0.3px, 残差 29. medium 10.1 / -0.2 竖直更准,
+    /// 但横向两个吸附位置分别偏右 0.28 / 偏左 0.24px, 残差 35–38
+    static let standard = Layout(fontSize: 9.9, weight: .medium, tracking: -0.1,
+                                 symbolCanvasHeight: 8.2, symbolSpacing: 0, symbolOffsetY: 0, offsetX: -0.25)
 
     /// 三位数 (100%) 带充电符号. 在 macOS 27.2 (26B123) 的真菜单栏上量: 6 帧系统电池取平均做基准,
     /// 用 SwiftUI 按 2x 实际渲染去扫 —— 字重 regular/medium/semibold × 字号 8.7–9.4 × 字距 × 符号
