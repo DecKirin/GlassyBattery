@@ -1202,13 +1202,13 @@ enum FilledBatteryGlyph {
     static let discharging = Layout(fontSize: 10.2, weight: .medium, tracking: -0.2,
                                     symbolCanvasHeight: 8.8, symbolSpacing: -0.75, symbolOffsetY: 0, offsetX: -0.25)
 
-    /// 三位数 (100%) 不带充电符号 —— 27.2 上还没量, 仍是 27.0 那套.
-    /// 在 macOS 27.0 (26A428) 的真菜单栏上和系统那颗并排逐像素比对 (95%):
-    /// 字号 9.4–10.6 × 字重 light/regular/medium 一起扫, 只有 regular 10.0 对得上 (残差 0.86,
-    /// 次好的 13.3), 包围盒、墨量 (121 vs 123px²) 和重心都一致. 符号量到墨迹 4.5×7.0pt,
-    /// 资源里墨迹占画布的 12/14, 所以画布 8.2
-    static let standard = Layout(fontSize: 10.0, weight: .regular, tracking: 0,
-                                 symbolCanvasHeight: 8.2, symbolSpacing: 0, symbolOffsetY: 0, offsetX: 0)
+    /// 三位数 (100%) 不带充电符号. 在 macOS 27.2 (26B123) 上 100% 拔掉电源和系统那颗并排量:
+    /// 27.0 那套 regular 10.0 字号和间距都对, 但墨量少 17%、整组偏右 0.5px (残差 74).
+    /// 离线渲染按 "间距不变、墨量 +17%" 挑, medium 9.9 / 字距 -0.1 正好 (间距差 0.05px 以内),
+    /// 实测墨量差 1–2%, 整组偏右 0.15px、偏低 0.3px, 残差 29. medium 10.1 / -0.2 竖直更准,
+    /// 但横向两个吸附位置分别偏右 0.28 / 偏左 0.24px, 残差 35–38
+    static let standard = Layout(fontSize: 9.9, weight: .medium, tracking: -0.1,
+                                 symbolCanvasHeight: 8.2, symbolSpacing: 0, symbolOffsetY: 0, offsetX: -0.25)
 
     /// 三位数 (100%) 带充电符号. 在 macOS 27.2 (26B123) 的真菜单栏上量: 6 帧系统电池取平均做基准,
     /// 用 SwiftUI 按 2x 实际渲染去扫 —— 字重 regular/medium/semibold × 字号 8.7–9.4 × 字距 × 符号
