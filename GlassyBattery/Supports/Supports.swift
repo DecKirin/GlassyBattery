@@ -1178,6 +1178,17 @@ enum FilledBatteryGlyph {
     static let charging = Layout(fontSize: 10.2, weight: .medium, tracking: -0.3,
                                  symbolCanvasHeight: 8.8, symbolSpacing: -0.75, symbolOffsetY: 0, offsetX: 0.375)
 
+    /// 一位数带充电符号. 在 macOS 27.2 (26B123) 上从 1% 充到 8% 时和系统那颗并排量: 字和闪电都和两位数那档
+    /// 一样 (medium 10.2, 闪电画布 8.8 —— 逐像素对过, alpha 差不到 0.03), 只是数字和闪电之间宽一点:
+    /// 间距 -0.75 时 "1" 离闪电近 0.65px、"7" 直接和闪电粘在一起, -0.5 在 1 / 3 / 8 上数字和闪电的重心
+    /// 都在 0.15px 以内 ("2" / "5" 整组偏左 0.6px, 是像素吸附, 两个一起偏). 也试过等宽数字 —— "8" 上粘连, 不是.
+    static let chargingSingleDigit = Layout(fontSize: 10.2, weight: .medium, tracking: -0.3,
+                                            symbolCanvasHeight: 8.8, symbolSpacing: -0.5, symbolOffsetY: 0, offsetX: 0.375)
+
+    /// 一位数, 没接电源. 和两位数同一套字; 8% 上用 -0.25 偏右 0.36px, 往左挪一档吸附位置
+    static let dischargingSingleDigit = Layout(fontSize: 10.2, weight: .medium, tracking: -0.2,
+                                               symbolCanvasHeight: 8.8, symbolSpacing: -0.75, symbolOffsetY: 0, offsetX: -0.375)
+
     /// 一位 / 两位数, 没接电源 (不带充电符号). 在 macOS 27.2 (26B123) 的 Retina 真菜单栏上拔掉电源,
     /// 和系统那颗并排量 (26% → 15%): 截图直接带菜单栏的 alpha 通道, 每颗挖洞按本列的底 (电量段 / 50% 的底)
     /// 归一. 系统这一档和充电那档是同一个字 —— medium 10.2 —— 只是旁边没符号, 整组居中.

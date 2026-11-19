@@ -178,9 +178,11 @@ struct mainBatteryView: View {
     /// (和 `charging` 同一套字, 居中), "100" 还是 `standard`
     private var glyphLayout: FilledBatteryGlyph.Layout {
         guard item.acPowered else {
-            return item.batteryLevel > 99 ? FilledBatteryGlyph.standard : FilledBatteryGlyph.discharging
+            if item.batteryLevel > 99 { return FilledBatteryGlyph.standard }
+            return item.batteryLevel < 10 ? FilledBatteryGlyph.dischargingSingleDigit : FilledBatteryGlyph.discharging
         }
-        return item.batteryLevel > 99 ? FilledBatteryGlyph.compact : FilledBatteryGlyph.charging
+        if item.batteryLevel > 99 { return FilledBatteryGlyph.compact }
+        return item.batteryLevel < 10 ? FilledBatteryGlyph.chargingSingleDigit : FilledBatteryGlyph.charging
     }
 
     /// 填充式电池里那组 "百分比 + 充电符号", 在主体里居中
